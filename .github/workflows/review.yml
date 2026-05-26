@@ -1,0 +1,133 @@
+name: PR Review
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Checkout ────────────────────────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── Setup Node ──────────────────────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # ── 1. Install dependencies ─────────────────────────────────────────────
+      - name: Install dependencies
+        id: install
+        run: npm ci
+        continue-on-error: true
+
+      # ── 2. TypeScript type check ────────────────────────────────────────────
+      - name: TypeScript check
+        id: typecheck
+        if: steps.install.outcome == 'success'
+        run: npx tsc --noEmit
+        continue-on-error: true
+
+      # ── 3. ESLint ───────────────────────────────────────────────────────────
+      - name: ESLint
+        id: eslint
+        if: steps.install.outcome == 'success'
+        run: npx eslint . --ext .ts,.tsx --max-warnings 0
+        continue-on-error: true
+
+      # ── 4. API key scan ─────────────────────────────────────────────────────
+      # Scans .ts/.tsx/.js/.mjs files for OpenAI-style secret keys (sk-...).
+      # Explicitly excludes node_modules, .next, .git, and any .env* files so
+      # that .env.local (which holds the real key) is never flagged.
+      - name: API key scan
+        id: keyscan
+        run: |
+          MATCHES=$(grep -rn \
+            --include="*.ts" \
+            --include="*.tsx" \
+            --include="*.js" \
+            --include="*.mjs" \
+            -E "sk-[a-zA-Z0-9_-]{20,}" \
+            --exclude-dir=node_modules \
+            --exclude-dir=.next \
+            --exclude-dir=.git \
+            . \
+            | grep -v "\.env" || true)
+
+          if [ -n "$MATCHES" ]; then
+            echo "::error::Potential API key(s) found in source files:"
+            echo "$MATCHES"
+            exit 1
+          fi
+        continue-on-error: true
+
+      # ── 5. Post PR comment ──────────────────────────────────────────────────
+      - name: Post review comment
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const outcomes = {
+              install:   '${{ steps.install.outcome }}',
+              typecheck: '${{ steps.typecheck.outcome }}',
+              eslint:    '${{ steps.eslint.outcome }}',
+              keyscan:   '${{ steps.keyscan.outcome }}',
+            };
+
+            const icon = (o) =>
+              o === 'success' ? '✅ Pass' :
+              o === 'skipped' ? '⏭️ Skipped' : '❌ Fail';
+
+            const skippedNote = outcomes.install !== 'success'
+              ? '\n\n> ⚠️ TypeScript and ESLint checks were skipped because `npm ci` failed.'
+              : '';
+
+            const body = [
+              '<!-- biobridge-review-comment -->',
+              '## BioBridge PR Review',
+              '',
+              '| Check | Result |',
+              '|---|---|',
+              `| 📦 npm ci (install) | ${icon(outcomes.install)} |`,
+              `| 🔷 TypeScript (\`tsc --noEmit\`) | ${icon(outcomes.typecheck)} |`,
+              `| 🔍 ESLint | ${icon(outcomes.eslint)} |`,
+              `| 🔑 API key scan | ${icon(outcomes.keyscan)} |`,
+              skippedNote,
+            ].join('\n');
+
+            const marker = '<!-- biobridge-review-comment -->';
+
+            // Upsert: update existing comment if present, otherwise create new
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner:      context.repo.owner,
+                repo:       context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner:        context.repo.owner,
+                repo:         context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
