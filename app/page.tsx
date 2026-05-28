@@ -851,7 +851,7 @@ export default function Home() {
     !!selectedMethod && (selectedMethod !== 1 || !!gStar);
 
   // ── Reset helpers ────────────────────────────────────────────────────────
-  function resetAnswerPanel(_q: Question) {
+  function resetAnswerPanel() {
     setActivePart(0);
     setResults({});
     setLoadingPart(null);
@@ -874,14 +874,14 @@ export default function Home() {
     resetWizard();
     if (id) {
       const q = QUESTIONS.find((q) => q.id === id);
-      if (q) resetAnswerPanel(q);
+      if (q) resetAnswerPanel();
     }
   }
 
   function handleMethodSelect(m: Method) {
     setSelectedMethod(m);
     resetWizard();
-    if (question) resetAnswerPanel(question);
+    if (question) resetAnswerPanel();
   }
 
   // Wizard step callbacks
@@ -907,7 +907,7 @@ export default function Home() {
 
   function handleGStarApproved(approved: GStarConfig) {
     setGStar(approved);
-    if (question) resetAnswerPanel(question);
+    if (question) resetAnswerPanel();
   }
 
   async function handleSubmit(partLabel: PartLabel, answer: string) {
@@ -1184,7 +1184,7 @@ export default function Home() {
                 <div className="text-center pt-2">
                   <button
                     onClick={() => {
-                      if (question) resetAnswerPanel(question);
+                      if (question) resetAnswerPanel();
                     }}
                     className="text-sm text-indigo-600 hover:text-indigo-800 font-medium underline underline-offset-2 transition"
                   >
