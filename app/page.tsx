@@ -8,7 +8,7 @@ import {
   QuestionTable,
   PartLabel,
 } from "@/app/lib/questions";
-import type { GradeResponse } from "@/app/api/grade/route";
+import type { GradeResponse, Method2GradeResponse } from "@/app/api/grade/route";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -639,18 +639,21 @@ function PartPanel({
   onSubmit,
   isLoading,
   completedResult,
+  lockedAnswer,
 }: {
   part: QuestionPart;
   onSubmit: (answer: string) => Promise<void>;
   isLoading: boolean;
   completedResult?: PartResult;
+  /** Method 2: answer submitted locally, waiting for batch API call. */
+  lockedAnswer?: string;
 }) {
   const [answer, setAnswer] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (!completedResult) textareaRef.current?.focus();
-  }, [completedResult]);
+    if (!completedResult && lockedAnswer === undefined) textareaRef.current?.focus();
+  }, [completedResult, lockedAnswer]);
 
   if (completedResult) {
     return (
@@ -667,6 +670,36 @@ function PartPanel({
         <p className="text-sm text-gray-500 italic">{part.prompt}</p>
         <p className="text-sm text-gray-700 bg-white border border-gray-200 rounded p-3 whitespace-pre-wrap">
           {completedResult.answer}
+        </p>
+      </div>
+    );
+  }
+
+  // Method 2: submitted locally but waiting for the batch API call to return.
+  if (lockedAnswer !== undefined) {
+    return (
+      <div className="rounded-lg border border-gray-200 bg-gray-50/60 p-4 space-y-2 opacity-80">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+            Part {part.label}
+          </span>
+          <span className="text-xs text-amber-500 font-medium flex items-center gap-1.5">
+            {isLoading ? (
+              <>
+                <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                Grading all parts…
+              </>
+            ) : (
+              "Waiting for remaining parts…"
+            )}
+          </span>
+        </div>
+        <p className="text-sm text-gray-500 italic">{part.prompt}</p>
+        <p className="text-sm text-gray-600 bg-white border border-gray-200 rounded p-3 whitespace-pre-wrap leading-relaxed">
+          {lockedAnswer}
         </p>
       </div>
     );
@@ -800,6 +833,12 @@ export default function Home() {
   const [results, setResults] = useState<Record<string, PartResult>>({});
   const [loadingPart, setLoadingPart] = useState<PartLabel | null>(null);
 
+  // ── Method 2 state ───────────────────────────────────────────────────────
+  // Answers collected per-part before the single batch API call fires.
+  const [method2Answers, setMethod2Answers] = useState<Record<string, string>>({});
+  const [method2Grading, setMethod2Grading] = useState(false);
+  const [cerNote, setCerNote] = useState<string | null>(null);
+
   // ── Derived state ────────────────────────────────────────────────────────
   const question = QUESTIONS.find((q) => q.id === selectedId);
   const partLabels = (question?.parts.map((p) => p.label) ?? []) as PartLabel[];
@@ -816,6 +855,9 @@ export default function Home() {
     setActivePart(0);
     setResults({});
     setLoadingPart(null);
+    setMethod2Answers({});
+    setMethod2Grading(false);
+    setCerNote(null);
   }
 
   function resetWizard() {
@@ -910,6 +952,59 @@ export default function Home() {
     }
   }
 
+  async function handleMethod2Submit(partLabel: PartLabel, answer: string) {
+    if (!question) return;
+
+    // Record this part's answer immediately so its panel locks.
+    const newAnswers = { ...method2Answers, [partLabel]: answer };
+    setMethod2Answers(newAnswers);
+
+    // Wait until every part has been submitted before calling the API.
+    const allPartsSubmitted = partLabels.every((l) => !!newAnswers[l]);
+    if (!allPartsSubmitted) return;
+
+    setMethod2Grading(true);
+    try {
+      const fetchStart = Date.now();
+      const res = await fetch("/api/grade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          questionId: question.id,
+          partLabel: partLabels[0], // satisfies the required field; not used by method 2
+          method: "2",
+          allResponses: newAnswers,
+        }),
+      });
+
+      const data = (await res.json()) as Method2GradeResponse;
+      const timeSeconds = elapsed(fetchStart);
+
+      const newResults: Record<string, PartResult> = {};
+      for (const p of question.parts) {
+        const partData = data.parts[p.label];
+        if (partData) {
+          newResults[p.label] = {
+            score: partData.score,
+            feedback: partData.feedback,
+            tokenCount: data.tokenCount,
+            timeSeconds,
+            answer: newAnswers[p.label] ?? "",
+            maxScore: p.maxScore,
+          };
+        }
+      }
+      setResults(newResults);
+      setCerNote(data.cerNote);
+      setActivePart(question.parts.length); // triggers allDone
+    } catch (err) {
+      console.error(err);
+      alert("Something went wrong while grading. Please try again.");
+    } finally {
+      setMethod2Grading(false);
+    }
+  }
+
   // ── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4">
@@ -951,7 +1046,7 @@ export default function Home() {
               {([1, 2, 3] as Method[]).map((m) => {
                 const labels: Record<Method, string> = {
                   1: "GradeOpt + RAG Pipeline",
-                  2: "Placeholder",
+                  2: "Two-Stage Scoring",
                   3: "Placeholder",
                 };
                 const isActive = selectedMethod === m;
@@ -969,7 +1064,7 @@ export default function Home() {
                     <span className={isActive ? "text-indigo-200" : "text-gray-400"}>
                       {labels[m]}
                     </span>
-                    {m !== 1 && <Badge label="Placeholder" />}
+                    {m === 3 && <Badge label="Placeholder" />}
                   </button>
                 );
               })}
@@ -984,9 +1079,14 @@ export default function Home() {
                 ✓ G* loaded — GradeOpt + RAG grading active
               </p>
             )}
-            {selectedMethod && selectedMethod !== 1 && (
+            {selectedMethod === 2 && (
+              <p className="mt-3 text-xs text-sky-600 font-medium">
+                Two GPT-4o calls — score all parts first, then generate feedback. Submit all parts before grading begins.
+              </p>
+            )}
+            {selectedMethod === 3 && (
               <p className="mt-3 text-xs text-gray-400">
-                Method {selectedMethod} is a placeholder — proceeding directly to the answer panel.
+                Method 3 is a placeholder — proceeding directly to the answer panel.
               </p>
             )}
           </SectionCard>
@@ -1025,18 +1125,33 @@ export default function Home() {
           <SectionCard step={3} title="Answer Panel">
             {!allDone ? (
               <div className="space-y-4">
-                {question!.parts.map((part, idx) => {
-                  if (idx > activePart) return null;
-                  return (
+                {selectedMethod === 2 ? (
+                  // Method 2: all parts visible at once; each locks after submit
+                  question!.parts.map((part) => (
                     <PartPanel
                       key={part.label}
                       part={part}
-                      onSubmit={(answer) => handleSubmit(part.label, answer)}
-                      isLoading={loadingPart === part.label}
+                      onSubmit={(answer) => handleMethod2Submit(part.label, answer)}
+                      isLoading={method2Grading}
                       completedResult={results[part.label] as PartResult | undefined}
+                      lockedAnswer={method2Answers[part.label]}
                     />
-                  );
-                })}
+                  ))
+                ) : (
+                  // Methods 1 & 3: sequential — reveal one part at a time
+                  question!.parts.map((part, idx) => {
+                    if (idx > activePart) return null;
+                    return (
+                      <PartPanel
+                        key={part.label}
+                        part={part}
+                        onSubmit={(answer) => handleSubmit(part.label, answer)}
+                        isLoading={loadingPart === part.label}
+                        completedResult={results[part.label] as PartResult | undefined}
+                      />
+                    );
+                  })
+                )}
               </div>
             ) : (
               <div className="space-y-4">
@@ -1057,6 +1172,15 @@ export default function Home() {
                   })}
                 </div>
                 <ResultsPanel question={question!} results={results} />
+                {/* CER coaching note — Method 2 only, when total score is low */}
+                {selectedMethod === 2 && cerNote && (
+                  <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 space-y-1">
+                    <p className="text-xs font-bold uppercase tracking-wider text-sky-600">
+                      CER Writing Tip
+                    </p>
+                    <p className="text-sm text-sky-800 leading-relaxed">{cerNote}</p>
+                  </div>
+                )}
                 <div className="text-center pt-2">
                   <button
                     onClick={() => {
