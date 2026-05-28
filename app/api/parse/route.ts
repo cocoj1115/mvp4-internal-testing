@@ -204,8 +204,11 @@ export async function POST(req: NextRequest) {
 
         send(`DATA:${JSON.stringify(payload)}`);
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        send(`Error: ${msg}`);
+        // Log the real error server-side only — never stream it to the client,
+        // as OpenAI error messages can include the API key or other credentials.
+        console.error("[/api/parse] Fatal error:", err);
+        send("Error calling GPT-4o. Please check your API key and try again.");
+        send(`DATA:${JSON.stringify({ error: "Parse failed. Please try again." })}`);
       } finally {
         controller.close();
       }
