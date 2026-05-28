@@ -334,6 +334,7 @@ function Step1Upload({ onComplete }: { onComplete: (result: ParseResult) => void
     setLines([]);
     setError(null);
     try {
+      // ── Phase 1: parse PDF ───────────────────────────────────────────────
       const fd = new FormData();
       fd.append("file", file);
       const dataJson = await streamLines(
@@ -342,6 +343,39 @@ function Step1Upload({ onComplete }: { onComplete: (result: ParseResult) => void
         (line) => setLines((prev) => [...prev, line])
       );
       const parsed = JSON.parse(dataJson) as ParseResult;
+
+      // ── Phase 2: build vector index ──────────────────────────────────────
+      setLines((prev) => [...prev, "Building vector index..."]);
+      try {
+        const vsRes = await fetch("/api/vectorstore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ parseResult: parsed }),
+        });
+        const vsData = (await vsRes.json()) as {
+          success?: boolean;
+          counts?: { kd1: number; kd2: number; ke: number };
+        };
+        if (vsData.success && vsData.counts) {
+          const { kd1, kd2, ke } = vsData.counts;
+          setLines((prev) => [
+            ...prev,
+            `Vector index ready — ${kd1} standards, ${kd2} rubrics, ${ke} examples indexed.`,
+          ]);
+        } else {
+          setLines((prev) => [
+            ...prev,
+            "Vector index build failed — grading will use G* only.",
+          ]);
+        }
+      } catch {
+        // Non-fatal: grading falls back to G*-only when isReady() is false.
+        setLines((prev) => [
+          ...prev,
+          "Vector index unavailable — grading will use G* only.",
+        ]);
+      }
+
       setResult(parsed);
       setDone(true);
     } catch (e) {
@@ -699,6 +733,7 @@ function ResultsPanel({
   const totalEarned = question.parts.reduce((s, p) => s + (results[p.label]?.score ?? 0), 0);
   const totalPossible = question.parts.reduce((s, p) => s + p.maxScore, 0);
   const totalTime = question.parts.reduce((s, p) => s + (results[p.label]?.timeSeconds ?? 0), 0);
+  const totalTokens = question.parts.reduce((s, p) => s + (results[p.label]?.tokenCount ?? 0), 0);
   const scoreColor =
     totalEarned === totalPossible ? "text-emerald-600" : totalEarned === 0 ? "text-rose-600" : "text-amber-500";
 
@@ -708,7 +743,8 @@ function ResultsPanel({
         <h3 className="font-semibold text-gray-800">Results</h3>
         <div className="flex items-center gap-4 text-sm text-gray-500">
           <span>Total: <span className={`font-bold ${scoreColor}`}>{totalEarned} / {totalPossible}</span></span>
-          <span>⏱ {totalTime}s total</span>
+          <span>⏱ {totalTime}s</span>
+          {totalTokens > 0 && <span>{totalTokens.toLocaleString()} tokens</span>}
         </div>
       </div>
       <div className="divide-y divide-gray-100">
@@ -728,6 +764,7 @@ function ResultsPanel({
                 </span>
                 <div className="flex items-center gap-3 text-sm text-gray-400">
                   <span>⏱ {r.timeSeconds}s</span>
+                  {r.tokenCount != null && <span>{r.tokenCount.toLocaleString()} tok</span>}
                   <ScorePip score={r.score} maxScore={r.maxScore} />
                 </div>
               </div>
@@ -760,7 +797,6 @@ export default function Home() {
 
   // ── Answer panel state ───────────────────────────────────────────────────
   const [activePart, setActivePart] = useState<number>(0);
-  const [partStartTimes, setPartStartTimes] = useState<Record<string, number>>({});
   const [results, setResults] = useState<Record<string, PartResult>>({});
   const [loadingPart, setLoadingPart] = useState<PartLabel | null>(null);
 
@@ -776,10 +812,8 @@ export default function Home() {
     !!selectedMethod && (selectedMethod !== 1 || !!gStar);
 
   // ── Reset helpers ────────────────────────────────────────────────────────
-  function resetAnswerPanel(q: Question) {
-    const firstLabel = q.parts[0]?.label ?? "A";
+  function resetAnswerPanel(_q: Question) {
     setActivePart(0);
-    setPartStartTimes({ [firstLabel]: Date.now() });
     setResults({});
     setLoadingPart(null);
   }
@@ -834,23 +868,13 @@ export default function Home() {
     if (question) resetAnswerPanel(question);
   }
 
-  // Timing: start clock when a new part becomes visible
-  useEffect(() => {
-    if (!question || activePart >= question.parts.length || !showAnswerPanel) return;
-    const label = question.parts[activePart].label;
-    setPartStartTimes((prev) =>
-      prev[label] ? prev : { ...prev, [label]: Date.now() }
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePart, selectedId, showAnswerPanel]);
-
   async function handleSubmit(partLabel: PartLabel, answer: string) {
     if (!question) return;
-    const startMs = partStartTimes[partLabel] ?? Date.now();
     const partDef = question.parts.find((p) => p.label === partLabel)!;
     setLoadingPart(partLabel);
 
     try {
+      const fetchStart = Date.now();
       const res = await fetch("/api/grade", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -864,11 +888,13 @@ export default function Home() {
       });
 
       const data: GradeResponse = await res.json();
+      const timeSeconds = elapsed(fetchStart);
+
       setResults((prev) => ({
         ...prev,
         [partLabel]: {
           ...data,
-          timeSeconds: elapsed(startMs),
+          timeSeconds,
           answer,
           maxScore: partDef.maxScore,
         },
@@ -876,10 +902,6 @@ export default function Home() {
 
       const nextIndex = question.parts.findIndex((p) => p.label === partLabel) + 1;
       setActivePart(nextIndex);
-      if (nextIndex < question.parts.length) {
-        const nextLabel = question.parts[nextIndex].label;
-        setPartStartTimes((prev) => ({ ...prev, [nextLabel]: Date.now() }));
-      }
     } catch (err) {
       console.error(err);
       alert("Something went wrong while grading. Please try again.");

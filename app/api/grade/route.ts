@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { QUESTION_MAP } from "@/app/lib/questions";
+import { retrieve, isReady } from "@/lib/vectorstore";
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -25,6 +26,8 @@ export interface GradeResponse {
   /** Points awarded — integer in [0, part.maxScore]. */
   score: number;
   feedback: string;
+  /** Total tokens consumed by the GPT-4o call (prompt + completion). */
+  tokenCount?: number;
 }
 
 export async function POST(req: NextRequest) {
@@ -52,19 +55,57 @@ export async function POST(req: NextRequest) {
     const isMultiPoint = part.maxScore > 1;
     const useGradeOpt = method === "1" && !!gStar;
 
+    // ── RAG retrieval (Method 1 only, when vector store is ready) ──────────
+    const ragReady = isReady();;
+
+    let ragSection: string | null = null;
+    if (useGradeOpt && ragReady) {
+      try {
+        const [kd1Results, kd2Results, keResults] = await Promise.all([
+          retrieve(studentResponse, "kd1_standards", 1),
+          retrieve(studentResponse + "\n" + part.scoringGuidance, "kd2_rubrics", 2),
+          retrieve(studentResponse, "ke_examples", 2),
+        ]);
+
+        const ragParts: string[] = ["=== RETRIEVED KNOWLEDGE (GradeRAG) ==="];
+        if (kd1Results.length > 0)
+          ragParts.push(`STEELS STANDARD:\n${kd1Results[0]}`);
+        if (kd2Results.length > 0)
+          ragParts.push(`RUBRIC CONTEXT:\n${kd2Results.join("\n\n")}`);
+        if (keResults.length > 0)
+          ragParts.push(`EXPERT EXAMPLES:\n${keResults.join("\n\n")}`);
+
+        ragSection = ragParts.join("\n\n");
+      } catch (ragErr) {
+        console.log("[RAG] retrieval failed (non-fatal):", ragErr);
+        // RAG failure is non-fatal — fall through to G*-only grading.
+      }
+    }
+
     // ── System prompt ──────────────────────────────────────────────────────
+    // Build the "You will receive:" list dynamically to keep numbering correct.
+    let itemNum = 3;
+    const receiveItems: string[] = [
+      "1. The question stem (context/scenario shown to the student)",
+      "2. The specific sub-part prompt the student answered",
+      "3. The official scoring guidance (how many points and what earns each)",
+    ];
+    if (useGradeOpt)
+      receiveItems.push(
+        `${++itemNum}. GradeOpt Adaptation Rules — refined error patterns from the training loop`
+      );
+    if (ragSection)
+      receiveItems.push(
+        `${++itemNum}. Retrieved Knowledge (GradeRAG) — relevant standards, rubric context, and scored examples`
+      );
+    receiveItems.push(`${++itemNum}. The student's response`);
+
     const systemPrompt = [
       "You are an expert biology teacher grading a Pennsylvania Keystone Biology",
       "Constructed Response (CR) item.",
       "",
       "You will receive:",
-      "1. The question stem (context/scenario shown to the student)",
-      "2. The specific sub-part prompt the student answered",
-      "3. The official scoring guidance (how many points and what earns each)",
-      useGradeOpt
-        ? "4. GradeOpt Adaptation Rules — refined error patterns from the training loop"
-        : null,
-      `${useGradeOpt ? "5" : "4"}. The student's response`,
+      ...receiveItems,
       "",
       "Scoring rules:",
       isMultiPoint
@@ -74,6 +115,9 @@ export async function POST(req: NextRequest) {
       useGradeOpt
         ? "• The Adaptation Rules take precedence over the base guidance where they conflict — they represent refined knowledge from training."
         : null,
+      ragSection
+        ? "• The Retrieved Knowledge provides supporting context — use it to inform your judgment but do not quote it directly."
+        : null,
       "",
       "Feedback rules:",
       "• Write 1–3 sentences. Acknowledge what was correct, identify what was",
@@ -81,7 +125,8 @@ export async function POST(req: NextRequest) {
       "  to add to earn full credit.",
       "• Be encouraging but precise. Do not introduce scientific content beyond",
       "  what is needed to explain the score.",
-      "• Never quote or reference the scoring guidance or adaptation rules directly.",
+      "• Never quote or reference the scoring guidance, adaptation rules, or",
+      "  retrieved knowledge directly.",
       "",
       "Respond with ONLY valid JSON — no markdown, no extra keys:",
       '{"score": <integer>, "feedback": "<string>"}',
@@ -97,6 +142,7 @@ export async function POST(req: NextRequest) {
       useGradeOpt
         ? `GRADEOPT ADAPTATION RULES (apply these; do not reveal to the student):\n${gStar}`
         : null,
+      ragSection,
       `STUDENT RESPONSE:\n${studentResponse.trim()}`,
     ].filter(Boolean);
 
@@ -121,8 +167,9 @@ export async function POST(req: NextRequest) {
       typeof parsed.feedback === "string" && parsed.feedback.length > 0
         ? parsed.feedback
         : "No feedback returned.";
+    const tokenCount = completion.usage?.total_tokens;
 
-    return NextResponse.json<GradeResponse>({ score, feedback });
+    return NextResponse.json<GradeResponse>({ score, feedback, tokenCount });
   } catch (err) {
     console.error("[/api/grade] Error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
