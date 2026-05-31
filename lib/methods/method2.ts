@@ -37,6 +37,17 @@ export interface Method2Result {
   latencyMs: number;
 }
 
+function normalizeScore(value: unknown, maxScore: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(maxScore, Math.round(value)));
+}
+
+function normalizeFeedback(value: unknown): string {
+  return typeof value === "string" && value.trim().length > 0
+    ? value
+    : "No feedback returned.";
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export async function gradeWithMethod2(
@@ -227,8 +238,8 @@ export async function gradeWithMethod2(
   const latencyMs = Date.now() - t0;
 
   return {
-    score: Math.max(0, Math.min(part.maxScore, Math.round(stage1.score ?? 0))),
-    feedback: stage2.feedback || "No feedback returned.",
+    score: normalizeScore(stage1.score, part.maxScore),
+    feedback: normalizeFeedback(stage2.feedback),
     tokenCount: totalTokens,
     latencyMs,
   };

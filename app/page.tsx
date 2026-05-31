@@ -37,6 +37,16 @@ interface PartResult extends GradeResponse {
   maxScore: number;
 }
 
+function isGradeResponse(value: unknown): value is GradeResponse {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.score === "number" &&
+    Number.isFinite(candidate.score) &&
+    typeof candidate.feedback === "string"
+  );
+}
+
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
 function elapsed(startMs: number) {
@@ -897,7 +907,20 @@ export default function Home() {
         }),
       });
 
-      const data: GradeResponse = await res.json();
+      const payload = (await res.json()) as unknown;
+      if (!res.ok) {
+        const message =
+          payload &&
+          typeof payload === "object" &&
+          typeof (payload as { error?: unknown }).error === "string"
+            ? (payload as { error: string }).error
+            : "Something went wrong while grading. Please try again.";
+        throw new Error(message);
+      }
+      if (!isGradeResponse(payload)) {
+        throw new Error("Invalid grading response received.");
+      }
+      const data = payload;
       const timeSeconds = elapsed(fetchStart);
 
       setResults((prev) => ({
@@ -937,7 +960,20 @@ export default function Home() {
         }),
       });
 
-      const data = (await res.json()) as GradeResponse;
+      const payload = (await res.json()) as unknown;
+      if (!res.ok) {
+        const message =
+          payload &&
+          typeof payload === "object" &&
+          typeof (payload as { error?: unknown }).error === "string"
+            ? (payload as { error: string }).error
+            : "Something went wrong while grading. Please try again.";
+        throw new Error(message);
+      }
+      if (!isGradeResponse(payload)) {
+        throw new Error("Invalid grading response received.");
+      }
+      const data = payload;
       const timeSeconds = elapsed(fetchStart);
 
       setResults((prev) => ({
