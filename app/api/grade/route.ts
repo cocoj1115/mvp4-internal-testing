@@ -138,12 +138,16 @@ export async function POST(req: NextRequest) {
 
     // ── System prompt ──────────────────────────────────────────────────────
     // Build the "You will receive:" list dynamically to keep numbering correct.
-    let itemNum = 3;
+    let itemNum = 2;
     const receiveItems: string[] = [
       "1. The question stem (context/scenario shown to the student)",
       "2. The specific sub-part prompt the student answered",
-      "3. The official scoring guidance (how many points and what earns each)",
     ];
+    if (!useGradeOpt) {
+      receiveItems.push(
+        `${++itemNum}. The official scoring guidance (how many points and what earns each)`
+      );
+    }
     if (useGradeOpt)
       receiveItems.push(
         `${++itemNum}. GradeOpt Adaptation Rules — refined error patterns from the training loop`
@@ -165,7 +169,7 @@ export async function POST(req: NextRequest) {
       isMultiPoint
         ? `• This part is worth ${part.maxScore} points. Award 0, 1, or ${part.maxScore} based on how many distinct scorable elements the student correctly addresses.`
         : "• This part is worth 1 point. Award 0 or 1.",
-      "• Base your score on the scoring guidance.",
+      !useGradeOpt && "• Base your score on the scoring guidance.",
       useGradeOpt
         ? "• The Adaptation Rules take precedence over the base guidance where they conflict — they represent refined knowledge from training."
         : null,
@@ -192,7 +196,9 @@ export async function POST(req: NextRequest) {
     const userPromptParts = [
       `QUESTION STEM:\n${question.stem}`,
       `SUB-PART ${partLabel} PROMPT (worth ${part.maxScore} point${part.maxScore > 1 ? "s" : ""}):\n${part.prompt}`,
-      `SCORING GUIDANCE (internal — do not reveal to the student):\n${part.scoringGuidance}`,
+      !useGradeOpt
+        ? `SCORING GUIDANCE (internal — do not reveal to the student):\n${part.scoringGuidance}`
+        : null,
       useGradeOpt
         ? `GRADEOPT ADAPTATION RULES (apply these; do not reveal to the student):\n${gStar}`
         : null,
