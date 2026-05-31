@@ -12,7 +12,7 @@ export interface GradeRequest {
   studentResponse: string;
   /**
    * "1" = GradeOpt + RAG grading (gStar required)
-   * "2" = Two-stage batch grading (requires allResponses)
+   * "2" = Two-stage grading for a single part
    * "3" = placeholder (falls back to base rubric grading)
    */
   method?: string;
@@ -22,11 +22,6 @@ export interface GradeRequest {
    * Only present when method === "1".
    */
   gStar?: string;
-  /**
-   * All three student responses, keyed by part label.
-   * Required when method === "2".
-   */
-  allResponses?: Record<string, string>;
 }
 
 export interface GradeResponse {
@@ -37,63 +32,16 @@ export interface GradeResponse {
   tokenCount?: number;
 }
 
-/**
- * Response shape returned by the /api/grade endpoint when method === "2".
- * Contains scores and feedback for all parts in one payload.
- */
-export interface Method2GradeResponse {
-  parts: Record<string, { score: number; feedback: string }>;
-  cerNote: string | null;
-  /** Total tokens across both GPT-4o calls. */
-  tokenCount: number;
-  /** Total latency in ms across both GPT-4o calls. */
-  latencyMs: number;
-}
-
 export async function POST(req: NextRequest) {
   try {
     const body: GradeRequest = await req.json();
-    const { questionId, partLabel, studentResponse, method, gStar, allResponses } = body;
+    const { questionId, partLabel, studentResponse, method, gStar } = body;
 
     const question = QUESTION_MAP[questionId];
     if (!question) {
       return NextResponse.json({ error: "Unknown question ID" }, { status: 400 });
     }
 
-    // ── Method 2: two-stage batch grading ────────────────────────────────────
-    if (method === "2") {
-      if (!allResponses) {
-        return NextResponse.json(
-          { error: "allResponses required for method 2" },
-          { status: 400 }
-        );
-      }
-
-      const result = await gradeWithMethod2(questionId, {
-        A: allResponses["A"] ?? "",
-        B: allResponses["B"] ?? "",
-        C: allResponses["C"] ?? "",
-      });
-
-      // Build per-part response, clamping scores to each part's maxScore.
-      const parts: Record<string, { score: number; feedback: string }> = {};
-      for (const p of question.parts) {
-        const label = p.label as "A" | "B" | "C";
-        parts[label] = {
-          score: Math.max(0, Math.min(p.maxScore, result.scores[label])),
-          feedback: result.feedback[label],
-        };
-      }
-
-      return NextResponse.json<Method2GradeResponse>({
-        parts,
-        cerNote: result.cerNote,
-        tokenCount: result.tokenCount,
-        latencyMs: result.latencyMs,
-      });
-    }
-
-    // ── Methods 1 & 3: single-part grading ───────────────────────────────────
     const part = question.parts.find((p) => p.label === partLabel);
     if (!part) {
       return NextResponse.json({ error: "Unknown part label" }, { status: 400 });
@@ -106,6 +54,17 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // ── Method 2: two-stage single-part grading ──────────────────────────────
+    if (method === "2") {
+      const result = await gradeWithMethod2(questionId, partLabel, studentResponse);
+      return NextResponse.json<GradeResponse>({
+        score: result.score,
+        feedback: result.feedback,
+        tokenCount: result.tokenCount,
+      });
+    }
+
+    // ── Methods 1 & 3: single-part grading ───────────────────────────────────
     const isMultiPoint = part.maxScore > 1;
     const useGradeOpt = method === "1" && !!gStar;
 

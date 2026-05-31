@@ -3,43 +3,36 @@
  *
  * Method 2: Two-Stage GPT-4o Grading
  *
- * Stage 1 — Scoring: score all three parts simultaneously using a binary
- *   concept-presence test with failure-type classification.
- * Stage 2 — Feedback: generate per-part feedback and an optional CER
- *   coaching note driven by the Stage 1 scores and failure types.
+ * Stage 1 — Scoring: score a single part using the item-specific rubric and
+ * classify fully incorrect responses by failure type.
+ * Stage 2 — Feedback: generate feedback for that same part based on the
+ * Stage 1 score and failure type.
  *
  * Both calls use response_format: { type: "json_object" } and temperature 0.
  * tokenCount and latencyMs span the combined duration of both calls.
  */
 
 import OpenAI from "openai";
-import { QUESTION_MAP } from "@/app/lib/questions";
+import { QUESTION_MAP, PartLabel } from "@/app/lib/questions";
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ── Internal stage types ──────────────────────────────────────────────────────
 
-interface Stage1PartResult {
-  score: 0 | 1;
+interface Stage1Response {
+  score: number;
   failure_type: string | null;
 }
 
-interface Stage1Response {
-  parts: Partial<Record<"A" | "B" | "C", Stage1PartResult>>;
-  total_score: number;
-}
-
 interface Stage2Response {
-  feedback: Partial<Record<"A" | "B" | "C", string>>;
-  cer_note: string | null;
+  feedback: string;
 }
 
 // ── Public result type ────────────────────────────────────────────────────────
 
 export interface Method2Result {
-  scores: { A: number; B: number; C: number };
-  feedback: { A: string; B: string; C: string };
-  cerNote: string | null;
+  score: number;
+  feedback: string;
   tokenCount: number;
   latencyMs: number;
 }
@@ -48,17 +41,14 @@ export interface Method2Result {
 
 export async function gradeWithMethod2(
   questionId: string,
-  responses: { A: string; B: string; C: string }
+  partLabel: PartLabel,
+  response: string
 ): Promise<Method2Result> {
   const question = QUESTION_MAP[questionId];
   if (!question) throw new Error(`Unknown questionId: ${questionId}`);
 
-  const getPart = (label: "A" | "B" | "C") =>
-    question.parts.find((p) => p.label === label);
-
-  const partA = getPart("A");
-  const partB = getPart("B");
-  const partC = getPart("C");
+  const part = question.parts.find((p) => p.label === partLabel);
+  if (!part) throw new Error(`Unknown partLabel: ${partLabel}`);
 
   const t0 = Date.now();
   let totalTokens = 0;
@@ -71,16 +61,15 @@ export async function gradeWithMethod2(
     "using item-specific scoring rubrics.",
     "",
     "YOUR ONLY JOB:",
-    "Determine whether each part of a student response satisfies",
-    "its scoring criterion. Output a structured JSON score object only.",
+    "Determine how many points the student's response earns for one",
+    "part. Output a structured JSON score object only.",
     "Do not address the student. Do not provide feedback.",
     "Do not explain your reasoning in prose.",
     "",
     "THE CORE SCORING TEST:",
-    "Ask exactly one question for each part:",
+    "Ask exactly one question:",
     '"Is the correct biological concept present in this response?"',
-    "YES → score: 1",
-    "NO  → score: 0",
+    `Award an integer score from 0 to ${part.maxScore}.`,
     "",
     "The rubric's concept field defines what correct means.",
     "The student does not need exact wording or technical terms.",
@@ -107,37 +96,32 @@ export async function gradeWithMethod2(
     "additional incorrect information alongside a correct concept.",
     "",
     "FAILURE CLASSIFICATION (required when score is 0):",
-    "Assign exactly one failure_type per zero-scored part:",
+    "Assign exactly one failure_type when score is 0:",
     '- "wrong_concept": student names a biologically incorrect concept',
     '- "vague": response contains no identifiable biological concept',
     '- "off_task": true biological fact but does not answer what was asked',
     '- "circular": response uses the conclusion as the reason',
     '- "copied_question": rephrases the question without adding biology',
     "",
-    "SCORING IS ADDITIVE AND INDEPENDENT:",
-    "Each part is worth exactly 1 point. Parts are scored independently.",
-    "Total score = sum of parts earned (maximum 3).",
+    "SCORING RULE:",
+    part.maxScore > 1
+      ? `This part is worth ${part.maxScore} points. Award intermediate credit when the response addresses some, but not all, distinct scorable elements.`
+      : "This part is worth exactly 1 point.",
     "",
     "Output JSON only, no markdown:",
-    '{"parts":{"A":{"score":0,"failure_type":null},"B":{"score":0,"failure_type":null},"C":{"score":0,"failure_type":null}},"total_score":0}',
+    '{"score":0,"failure_type":null}',
   ].join("\n");
 
   const stage1User = [
     `Question stimulus: ${question.stem}`,
     "",
-    `Part A prompt: ${partA?.prompt ?? "(not present)"}`,
-    `Part B prompt: ${partB?.prompt ?? "(not present)"}`,
-    `Part C prompt: ${partC?.prompt ?? "(not present)"}`,
+    `Part ${partLabel} prompt: ${part.prompt}`,
     "",
-    "Rubrics:",
-    `Part A concept: ${partA?.scoringGuidance ?? "(not present)"}`,
-    `Part B concept: ${partB?.scoringGuidance ?? "(not present)"}`,
-    `Part C concept: ${partC?.scoringGuidance ?? "(not present)"}`,
+    "Rubric:",
+    part.scoringGuidance,
     "",
-    "Student responses:",
-    `Part A: ${responses.A.trim() || "(no response)"}`,
-    `Part B: ${responses.B.trim() || "(no response)"}`,
-    `Part C: ${responses.C.trim() || "(no response)"}`,
+    "Student response:",
+    response.trim() || "(no response)",
   ].join("\n");
 
   const stage1Completion = await client.chat.completions.create({
@@ -159,13 +143,17 @@ export async function gradeWithMethod2(
 
   const stage2System = [
     "You are a biology tutoring feedback agent for Keystone Biology",
-    "constructed-response questions. Generate feedback for each",
-    "scored part based on the failure type.",
+    "constructed-response questions. Generate feedback for one",
+    "scored part based on the score and failure type.",
     "",
     "FEEDBACK RULES BY FAILURE TYPE:",
     "",
-    "Score 1: Write one sentence confirming what the student got right.",
+    `Full credit (${part.maxScore}/${part.maxScore}): Write one sentence confirming what the student got right.`,
     "Be specific — name what they said that earned the point.",
+    "",
+    "Partial credit (score > 0 but not full credit):",
+    "State what the student got right, then name the missing idea",
+    "needed for full credit.",
     "",
     "Score 0 — wrong_concept:",
     "Name what the student said. State it is not the right concept",
@@ -200,38 +188,24 @@ export async function gradeWithMethod2(
     "Tell the student they rephrased the question without adding",
     "biology. Ask them to explain the underlying science.",
     "",
-    "CER COACHING LAYER:",
-    "Add a CER coaching note ONLY when total_score is 0 or 1.",
-    "Do NOT add it when total_score is 2 or 3.",
-    "The coaching note addresses the weakest CER component across",
-    "the full response.",
-    "",
-    'No claim present: "Across your response, try starting each part',
-    'by directly stating your answer before explaining it."',
-    'Claim but no evidence: "You are making claims, but try connecting',
-    'them to a specific biological fact, named structure, or data point."',
-    'Claim and evidence but no reasoning: "You have identified what',
-    'happens — now explain why, using a biological mechanism."',
-    "",
     "FEEDBACK LENGTH: Maximum 2 sentences per part.",
     "",
     "Output JSON only, no markdown:",
-    '{"feedback":{"A":"feedback string","B":"feedback string","C":"feedback string"},"cer_note":"coaching note string or null"}',
+    '{"feedback":"feedback string"}',
   ].join("\n");
 
   const stage2User = [
     `Question stimulus: ${question.stem}`,
     "",
-    `Part A prompt: ${partA?.prompt ?? "(not present)"}`,
-    `Part B prompt: ${partB?.prompt ?? "(not present)"}`,
-    `Part C prompt: ${partC?.prompt ?? "(not present)"}`,
+    `Part ${partLabel} prompt: ${part.prompt}`,
     "",
-    "Student responses:",
-    `Part A: ${responses.A.trim() || "(no response)"}`,
-    `Part B: ${responses.B.trim() || "(no response)"}`,
-    `Part C: ${responses.C.trim() || "(no response)"}`,
+    "Rubric:",
+    part.scoringGuidance,
     "",
-    "Scores:",
+    "Student response:",
+    response.trim() || "(no response)",
+    "",
+    "Scoring result:",
     JSON.stringify(stage1, null, 2),
   ].join("\n");
 
@@ -253,17 +227,8 @@ export async function gradeWithMethod2(
   const latencyMs = Date.now() - t0;
 
   return {
-    scores: {
-      A: stage1.parts?.A?.score ?? 0,
-      B: stage1.parts?.B?.score ?? 0,
-      C: stage1.parts?.C?.score ?? 0,
-    },
-    feedback: {
-      A: stage2.feedback?.A ?? "No feedback returned.",
-      B: stage2.feedback?.B ?? "No feedback returned.",
-      C: stage2.feedback?.C ?? "No feedback returned.",
-    },
-    cerNote: stage2.cer_note ?? null,
+    score: Math.max(0, Math.min(part.maxScore, Math.round(stage1.score ?? 0))),
+    feedback: stage2.feedback || "No feedback returned.",
     tokenCount: totalTokens,
     latencyMs,
   };
