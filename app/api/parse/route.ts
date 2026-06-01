@@ -4,7 +4,7 @@
  * Accepts a multipart/form-data upload containing a single PDF file
  * (KD1 + KD2 + KE scoring materials).
  *
- * Extracts all text via pdf-parse, then makes three sequential GPT-4o calls
+ * Extracts all text via pdf-parse, then makes three sequential model calls
  * to classify the content into KD1 (STEELS standards), KD2 (rubric criteria),
  * and KE (scored examples). Assembles a G0 config from the results.
  *
@@ -15,6 +15,10 @@
 import { NextRequest } from "next/server";
 import OpenAI from "openai";
 import pdfParse from "pdf-parse";
+import {
+  DEFAULT_GRADING_MODEL,
+  isGradingModel,
+} from "@/lib/grading-models";
 
 // Force Node.js runtime so pdf-parse (which uses fs) is available.
 export const runtime = "nodejs";
@@ -58,6 +62,13 @@ export async function POST(req: NextRequest) {
         const formData = await req.formData();
         const file = formData.get("file") as File | null;
         if (!file) throw new Error("No file uploaded.");
+        const modelValue = formData.get("model");
+        if (modelValue != null && !isGradingModel(modelValue)) {
+          throw new Error(`Unsupported model: ${String(modelValue)}`);
+        }
+        const model = isGradingModel(modelValue)
+          ? modelValue
+          : DEFAULT_GRADING_MODEL;
 
         const buffer = Buffer.from(await file.arrayBuffer());
         const pdfData = await pdfParse(buffer);
@@ -66,10 +77,10 @@ export async function POST(req: NextRequest) {
         send(`Extracted ${text.length.toLocaleString()} characters of text.`);
 
         // ── KD1: STEELS standards ────────────────────────────────────────────
-        send("Calling GPT-4o to identify STEELS standards (KD1)...");
+        send(`Calling ${model} to identify STEELS standards (KD1)...`);
 
         const kd1Completion = await client.chat.completions.create({
-          model: "gpt-4o",
+          model,
           temperature: 0,
           response_format: { type: "json_object" },
           messages: [
@@ -91,10 +102,10 @@ export async function POST(req: NextRequest) {
         send(`Found ${standards.length} standard${standards.length !== 1 ? "s" : ""}.`);
 
         // ── KD2: Rubric criteria ─────────────────────────────────────────────
-        send("Calling GPT-4o to extract rubric criteria (KD2)...");
+        send(`Calling ${model} to extract rubric criteria (KD2)...`);
 
         const kd2Completion = await client.chat.completions.create({
-          model: "gpt-4o",
+          model,
           temperature: 0,
           response_format: { type: "json_object" },
           messages: [
@@ -124,10 +135,10 @@ export async function POST(req: NextRequest) {
         );
 
         // ── KE: Scored examples ──────────────────────────────────────────────
-        send("Calling GPT-4o to extract scored examples (KE)...");
+        send(`Calling ${model} to extract scored examples (KE)...`);
 
         const keCompletion = await client.chat.completions.create({
-          model: "gpt-4o",
+          model,
           temperature: 0,
           response_format: { type: "json_object" },
           messages: [
