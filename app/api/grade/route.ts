@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
     const gradingModel = model ?? DEFAULT_GRADING_MODEL;
     if (!isGradingModel(gradingModel)) {
       return NextResponse.json(
-        { error: `Unsupported grading model: ${String(model)}` },
+        { error: `Unsupported grading model: ${String(gradingModel)}` },
         { status: 400 }
       );
     }

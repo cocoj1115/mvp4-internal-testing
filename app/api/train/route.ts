@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
       model?: unknown;
     };
     g0 = body.g0 ?? {};
-    if (body.model !== undefined) {
+    if (body.model != null) {
       if (!isGradingModel(body.model)) {
         return new Response(
           `Error: Unsupported model: ${String(body.model)}\nDATA:${JSON.stringify({ error: "Unsupported model" })}`,
