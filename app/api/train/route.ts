@@ -18,6 +18,11 @@
 
 import { NextRequest } from "next/server";
 import OpenAI from "openai";
+import {
+  DEFAULT_GRADING_MODEL,
+  GradingModel,
+  isGradingModel,
+} from "@/lib/grading-models";
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -91,9 +96,29 @@ function parseExamples(examplesStr: string): KnownExample[] {
 
 export async function POST(req: NextRequest) {
   let g0: Record<string, G0PartConfig> = {};
+  let model: GradingModel = DEFAULT_GRADING_MODEL;
   try {
-    const body = (await req.json()) as { g0?: Record<string, G0PartConfig> };
+    const body = (await req.json()) as {
+      g0?: Record<string, G0PartConfig>;
+      model?: unknown;
+    };
     g0 = body.g0 ?? {};
+    if (body.model !== undefined) {
+      if (!isGradingModel(body.model)) {
+        return new Response(
+          `Error: Unsupported model: ${String(body.model)}\nDATA:${JSON.stringify({ error: "Unsupported model" })}`,
+          {
+            status: 400,
+            headers: {
+              "Content-Type": "text/plain; charset=utf-8",
+              "Cache-Control": "no-cache, no-transform",
+              "X-Accel-Buffering": "no",
+            },
+          }
+        );
+      }
+      model = body.model;
+    }
   } catch {
     // Non-critical; proceed with empty G0 (all parts skip training).
   }
@@ -108,7 +133,7 @@ export async function POST(req: NextRequest) {
         controller.enqueue(encoder.encode(line + "\n"));
 
       try {
-        send("Starting GradeOpt training...");
+        send(`Starting GradeOpt training with ${model}...`);
 
         const gStar: Record<string, string> = {};
 
@@ -143,7 +168,7 @@ export async function POST(req: NextRequest) {
                 ].join("\n\n");
 
                 const completion = await client.chat.completions.create({
-                  model: "gpt-4o",
+                  model,
                   temperature: 0,
                   response_format: { type: "json_object" },
                   messages: [
@@ -218,7 +243,7 @@ export async function POST(req: NextRequest) {
               .join("\n\n");
 
             const reflectorCompletion = await client.chat.completions.create({
-              model: "gpt-4o",
+              model,
               temperature: 0,
               response_format: { type: "json_object" },
               messages: [
@@ -251,7 +276,7 @@ export async function POST(req: NextRequest) {
             send(`Part ${label} — Iteration ${iter} — Refiner updating rules...`);
 
             const refinerCompletion = await client.chat.completions.create({
-              model: "gpt-4o",
+              model,
               temperature: 0,
               // No response_format — REFINER outputs plain text, not JSON.
               messages: [

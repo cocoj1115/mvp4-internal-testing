@@ -9,6 +9,11 @@ import {
   PartLabel,
 } from "@/app/lib/questions";
 import type { GradeResponse } from "@/app/api/grade/route";
+import {
+  DEFAULT_GRADING_MODEL,
+  GRADING_MODELS,
+  GradingModel,
+} from "@/lib/grading-models";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -118,14 +123,6 @@ function SectionCard({
       </div>
       <div className="px-6 py-5">{children}</div>
     </section>
-  );
-}
-
-function Badge({ label }: { label: string }) {
-  return (
-    <span className="ml-2 inline-block rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold px-2 py-0.5 tracking-wide uppercase">
-      {label}
-    </span>
   );
 }
 
@@ -329,7 +326,13 @@ function CheckBanner({ label, onNext }: { label: string; onNext: () => void }) {
 
 // ─── Wizard: Step 1 — Upload Materials ───────────────────────────────────────
 
-function Step1Upload({ onComplete }: { onComplete: (result: ParseResult) => void }) {
+function Step1Upload({
+  model,
+  onComplete,
+}: {
+  model: GradingModel;
+  onComplete: (result: ParseResult) => void;
+}) {
   const [file, setFile] = useState<File | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [lines, setLines] = useState<string[]>([]);
@@ -347,6 +350,7 @@ function Step1Upload({ onComplete }: { onComplete: (result: ParseResult) => void
       // ── Phase 1: parse PDF ───────────────────────────────────────────────
       const fd = new FormData();
       fd.append("file", file);
+      fd.append("model", model);
       const dataJson = await streamLines(
         "/api/parse",
         { method: "POST", body: fd },
@@ -540,9 +544,11 @@ function Step2ReviewG0({
 
 function Step3Training({
   g0,
+  model,
   onComplete,
 }: {
   g0: G0Config;
+  model: GradingModel;
   onComplete: (gStar: GStarConfig) => void;
 }) {
   const [lines, setLines] = useState<string[]>([]);
@@ -551,6 +557,7 @@ function Step3Training({
   const [draft, setDraft] = useState<GStarConfig | null>(null);
   const startedRef = useRef(false);
   const g0Ref = useRef(g0);
+  const modelRef = useRef(model);
 
   useEffect(() => {
     if (startedRef.current) return;
@@ -562,7 +569,7 @@ function Step3Training({
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ g0: g0Ref.current }),
+            body: JSON.stringify({ g0: g0Ref.current, model: modelRef.current }),
           },
           (line) => setLines((prev) => [...prev, line])
         );
@@ -754,6 +761,8 @@ function ResultsPanel({
   const totalPossible = question.parts.reduce((s, p) => s + p.maxScore, 0);
   const totalTime = question.parts.reduce((s, p) => s + (results[p.label]?.timeSeconds ?? 0), 0);
   const totalTokens = question.parts.reduce((s, p) => s + (results[p.label]?.tokenCount ?? 0), 0);
+  const modelUsed = question.parts.map((p) => results[p.label]?.model).find(Boolean);
+  const modelLabel = GRADING_MODELS.find((model) => model.id === modelUsed)?.label ?? modelUsed;
   const scoreColor =
     totalEarned === totalPossible ? "text-emerald-600" : totalEarned === 0 ? "text-rose-600" : "text-amber-500";
 
@@ -763,6 +772,7 @@ function ResultsPanel({
         <h3 className="font-semibold text-gray-800">Results</h3>
         <div className="flex items-center gap-4 text-sm text-gray-500">
           <span>Total: <span className={`font-bold ${scoreColor}`}>{totalEarned} / {totalPossible}</span></span>
+          {modelLabel && <span>{modelLabel}</span>}
           <span>⏱ {totalTime}s</span>
           {totalTokens > 0 && <span>{totalTokens.toLocaleString()} tokens</span>}
         </div>
@@ -806,6 +816,8 @@ export default function Home() {
   // ── Question & method ────────────────────────────────────────────────────
   const [selectedId, setSelectedId] = useState("");
   const [selectedMethod, setSelectedMethod] = useState<Method | null>(null);
+  const [selectedModel, setSelectedModel] =
+    useState<GradingModel>(DEFAULT_GRADING_MODEL);
 
   // ── Wizard state (Method 1) ──────────────────────────────────────────────
   const [wizardStep, setWizardStep] = useState<WizardStep>(1);
@@ -904,6 +916,7 @@ export default function Home() {
           studentResponse: answer,
           method: selectedMethod?.toString(),
           gStar: gStar?.[partLabel],
+          model: selectedModel,
         }),
       });
 
@@ -937,7 +950,7 @@ export default function Home() {
       setActivePart(nextIndex);
     } catch (err) {
       console.error(err);
-      alert("Something went wrong while grading. Please try again.");
+      alert(err instanceof Error ? err.message : "Something went wrong while grading. Please try again.");
     } finally {
       setLoadingPart(null);
     }
@@ -957,6 +970,7 @@ export default function Home() {
           partLabel,
           studentResponse: answer,
           method: "2",
+          model: selectedModel,
         }),
       });
 
@@ -990,7 +1004,7 @@ export default function Home() {
       setActivePart(nextIndex);
     } catch (err) {
       console.error(err);
-      alert("Something went wrong while grading. Please try again.");
+      alert(err instanceof Error ? err.message : "Something went wrong while grading. Please try again.");
     } finally {
       setLoadingPart(null);
     }
@@ -1038,7 +1052,7 @@ export default function Home() {
                 const labels: Record<Method, string> = {
                   1: "GradeOpt + RAG Pipeline",
                   2: "Two-Stage Scoring",
-                  3: "Placeholder",
+                  3: "Feedback-First Boundary",
                 };
                 const isActive = selectedMethod === m;
                 return (
@@ -1055,7 +1069,6 @@ export default function Home() {
                     <span className={isActive ? "text-indigo-200" : "text-gray-400"}>
                       {labels[m]}
                     </span>
-                    {m === 3 && <Badge label="Placeholder" />}
                   </button>
                 );
               })}
@@ -1072,14 +1085,44 @@ export default function Home() {
             )}
             {selectedMethod === 2 && (
               <p className="mt-3 text-xs text-sky-600 font-medium">
-                Two GPT-4o calls per part — score first, then generate feedback for that part.
+                Two model calls per part — score first, then generate feedback for that part.
               </p>
             )}
             {selectedMethod === 3 && (
-              <p className="mt-3 text-xs text-gray-400">
-                Method 3 is a placeholder — proceeding directly to the answer panel.
+              <p className="mt-3 text-xs text-teal-600 font-medium">
+                One model call per part — error analysis, feedback, then score with boundary examples.
               </p>
             )}
+            <div className="mt-5 border-t border-gray-100 pt-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div className="min-w-0">
+                  <label
+                    htmlFor="model-select"
+                    className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1"
+                  >
+                    Model
+                  </label>
+                  <select
+                    id="model-select"
+                    value={selectedModel}
+                    onChange={(e) => setSelectedModel(e.target.value as GradingModel)}
+                    className="w-full sm:w-64 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                  >
+                    {GRADING_MODELS.map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {GRADING_MODELS.find((model) => model.id === selectedModel)?.note}
+                  </p>
+                </div>
+                <span className="text-[11px] text-gray-400">
+                  Use the same model across methods when comparing results.
+                </span>
+              </div>
+            </div>
           </SectionCard>
         )}
 
@@ -1089,7 +1132,7 @@ export default function Home() {
             <WizardProgress step={wizardStep} />
 
             {wizardStep === 1 && (
-              <Step1Upload onComplete={handleParseDone} />
+              <Step1Upload model={selectedModel} onComplete={handleParseDone} />
             )}
             {wizardStep === 2 && (
               <Step2ReviewG0
@@ -1099,7 +1142,11 @@ export default function Home() {
               />
             )}
             {wizardStep === 3 && (
-              <Step3Training g0={g0Config} onComplete={handleTrainingDone} />
+              <Step3Training
+                g0={g0Config}
+                model={selectedModel}
+                onComplete={handleTrainingDone}
+              />
             )}
             {wizardStep === 4 && (
               <Step4ReviewGStar

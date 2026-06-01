@@ -1,7 +1,7 @@
 /**
  * lib/methods/method2.ts
  *
- * Method 2: Two-Stage GPT-4o Grading
+ * Method 2: Two-Stage LLM Grading
  *
  * Stage 1 — Scoring: score a single part using the item-specific rubric and
  * classify fully incorrect responses by failure type.
@@ -14,6 +14,7 @@
 
 import OpenAI from "openai";
 import { QUESTION_MAP, PartLabel } from "@/app/lib/questions";
+import { GradingModel } from "@/lib/grading-models";
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -42,10 +43,48 @@ function normalizeScore(value: unknown, maxScore: number): number {
   return Math.max(0, Math.min(maxScore, Math.round(value)));
 }
 
+function extractFeedbackText(value: unknown): string | null {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  if (Array.isArray(value)) {
+    const parts = value
+      .map(extractFeedbackText)
+      .filter((part): part is string => Boolean(part));
+    return parts.length > 0 ? parts.join(" ") : null;
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const preferredKeys = [
+      "feedback",
+      "student_feedback",
+      "message",
+      "text",
+      "hint",
+      "cue",
+      "guiding_question",
+      "next_step",
+    ];
+
+    for (const key of preferredKeys) {
+      const text = extractFeedbackText(record[key]);
+      if (text) return text;
+    }
+
+    const parts = Object.values(record)
+      .map(extractFeedbackText)
+      .filter((part): part is string => Boolean(part));
+    return parts.length > 0 ? parts.join(" ") : null;
+  }
+
+  return null;
+}
+
 function normalizeFeedback(value: unknown): string {
-  return typeof value === "string" && value.trim().length > 0
-    ? value
-    : "No feedback returned.";
+  return extractFeedbackText(value) ?? "No feedback returned.";
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
@@ -53,7 +92,8 @@ function normalizeFeedback(value: unknown): string {
 export async function gradeWithMethod2(
   questionId: string,
   partLabel: PartLabel,
-  response: string
+  response: string,
+  model: GradingModel
 ): Promise<Method2Result> {
   const question = QUESTION_MAP[questionId];
   if (!question) throw new Error(`Unknown questionId: ${questionId}`);
@@ -136,7 +176,7 @@ export async function gradeWithMethod2(
   ].join("\n");
 
   const stage1Completion = await client.chat.completions.create({
-    model: "gpt-4o",
+    model,
     temperature: 0,
     response_format: { type: "json_object" },
     messages: [
@@ -201,6 +241,8 @@ export async function gradeWithMethod2(
     "",
     "FEEDBACK LENGTH: Maximum 2 sentences per part.",
     "",
+    "JSON contract: feedback must be one single student-facing string, not an object, array, list, or nested field.",
+    "",
     "Output JSON only, no markdown:",
     '{"feedback":"feedback string"}',
   ].join("\n");
@@ -221,7 +263,7 @@ export async function gradeWithMethod2(
   ].join("\n");
 
   const stage2Completion = await client.chat.completions.create({
-    model: "gpt-4o",
+    model,
     temperature: 0,
     response_format: { type: "json_object" },
     messages: [
