@@ -1,4 +1,26 @@
 {
-  "standard": "placeholder",
-  "status": "not_trained"
+  "standard": "3.1.9-12.P",
+  "item": "Module 2, Q14",
+  "question_stem": "Breeders develop different-colored bearded dragons through selective breeding. Ask questions to clarify relationships about the role of DNA and chromosomes in coding the instructions for characteristic traits passed from parents to offspring.",
+  "part_a": {
+    "key_concept": "Breeders can develop different-colored bearded dragons by selectively crossing (breeding) bearded dragons that have different appearances/colors.",
+    "scoring_rubric": "Award 1 point if the response correctly describes that breeders selectively breed/cross dragons with different colors or appearances. Award 0 points if the response attributes new colors solely to mutation or incomplete dominance without mentioning selective breeding, or if the response is too vague (e.g., 'dragons have different melanin').",
+    "adaptation_rules": ""
+  },
+  "part_b": {
+    "key_concept": "Offspring receive half their DNA from each parent via fertilization. The combined DNA from both parents determines the proteins produced and therefore the traits, including color. Accepted: offspring get DNA from both parents; each parent provides one allele per gene; parental DNA determines offspring phenotype.",
+    "scoring_rubric": "Award 1 point if the response correctly describes that offspring receive DNA from both parents and that this combined DNA determines the offspring's color/traits. Award 0 points if the response only says dominant/recessive colors mix without explaining the DNA/allele mechanism, or describes dominant as 'stronger' without reference to inheritance.",
+    "adaptation_rules": "- Rule: [Response mentions DNA inheritance from both parents but lacks explanation of allele combination] \u2192 [0 points]  \n  Example: \"The offspring gets half of its DNA from each parent.\"  \n  Rationale: While recognizing the inheritance pattern is crucial, understanding how alleles from each parent combine to influence traits is essential for a comprehensive grasp of genetic inheritance.\n\n- Rule: [Response mentions dominant/recessive traits without explaining allele mechanism] \u2192 [0 points]  \n  Example: \"The offspring will show the dominant color trait.\"  \n  Rationale: Simply stating dominant or recessive traits without explaining the underlying allele mechanism does not demonstrate an understanding of how genetic traits are expressed.\n\n- Rule: [Response includes DNA inheritance and mentions alleles affecting phenotype] \u2192 [1 point]  \n  Example: \"Offspring receive DNA from both parents, with each parent contributing one allele per gene, which determines traits like color.\"  \n  Rationale: This response aligns with the key concept by explaining the role of alleles in determining phenotype, thus demonstrating a comprehensive understanding of genetic inheritance."
+  },
+  "part_c": {
+    "key_concept": "To develop a recessive trait: (1) breed two individuals that both express the recessive trait (homozygous recessive \u00d7 homozygous recessive), OR (2) breed heterozygous individuals to produce homozygous recessive offspring, then breed those homozygous recessive individuals together.",
+    "scoring_rubric": "Award 1 point if the response correctly describes breeding two recessive-expressing individuals OR a valid multi-step strategy using heterozygous crosses to isolate the recessive trait. Award 0 points if the response suggests crossing recessive with dominant (which reduces recessive expression), or describes no clear genetic strategy.",
+    "adaptation_rules": "ADAPTATION RULES:\n\n- Rule: If a response demonstrates understanding of Mendelian genetics through probability or outcome prediction (e.g., \"1 in 4 chance\") in the context of heterozygous crosses, and suggests breeding individuals expressing the trait, award 1 point even if not all steps are explicitly stated.\n  Example: \"The breeder should breed those that have the trait for a guaranteed outcome. If there are none expressing the trait, then breed dragons that are heterozygous for the trait. This will have a 1 in 4 chance of working.\"\n  Rationale: Understanding the probability of offspring genotypes in heterozygous crosses indicates knowledge of genetic principles necessary for developing recessive traits, aligning with the rubric's requirement for a valid genetic strategy.\n\n- Rule: If a response suggests breeding individuals that express the recessive trait (homozygous recessive) and includes a valid genetic strategy for obtaining such individuals, award 1 point even if the final breeding step is not explicitly mentioned.\n  Example: \"The breeder should breed those that have the trait for a guaranteed outcome. If there are none expressing the trait, then breed dragons that are heterozygous for the trait.\"\n  Rationale: The key concept is to ensure the recessive trait is passed on, and understanding the initial steps to achieve homozygous recessive offspring is crucial. The rubric should recognize this foundational understanding."
+  },
+  "metadata": {
+    "trained_on": "4 official Keystone 2025-2026 Item Sampler responses",
+    "source": "2025_keystone_biology_item_sampler",
+    "status": "pending_teacher_review",
+    "teacher_approved": false
+  }
 }

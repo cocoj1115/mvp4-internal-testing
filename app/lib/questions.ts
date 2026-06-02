@@ -7,7 +7,7 @@ export interface QuestionPart {
   maxScore: number;
   /** Internal rubric for the grading API — never exposed in the UI. */
   scoringGuidance: string;
-  /** Shown to the student after exhausting all attempts on this part. */
+  /** Shown to student after exhausting both attempts on this part. */
   modelAnswer: string;
 }
 
@@ -94,7 +94,7 @@ export const QUESTIONS: Question[] = [
         scoringGuidance:
           "Award 1 point if the response describes that the pupils constricted/became smaller in response to bright light to reduce the amount of light entering the eye (to protect the retina or to prevent too much light). Accept responses mentioning the iris muscles contracting to constrict the pupil.",
         modelAnswer:
-          "The student's eyes changed because the amount of light in the environment changed — the teacher turned on a bright light, causing the pupils to react.",
+          "The student's eyes changed because the amount of light in the environment changed — the teacher turned on a bright light, causing the pupils to constrict (get smaller) to reduce the amount of light entering the eye.",
       },
       {
         label: "B",
@@ -103,7 +103,7 @@ export const QUESTIONS: Question[] = [
         scoringGuidance:
           "Award 1 point if the response explains that dim light allowed the students' pupils to dilate so that all students would have a consistent/standardized starting condition (pupils at maximum or near-maximum dilation) before the investigation began, allowing for a fair/controlled comparison.",
         modelAnswer:
-          "The teacher kept the classroom dimly lit for a few minutes to allow students' eyes to fully adjust and establish a baseline (pupils fully dilated), so that when the bright light was turned on, the change in pupil size could be clearly observed and compared.",
+          "The teacher kept the classroom dimly lit to allow students' eyes to fully adjust and establish a consistent baseline (pupils fully dilated), so that when the bright light was turned on, the change in pupil size could be clearly observed and compared.",
       },
       {
         label: "C",
@@ -112,7 +112,7 @@ export const QUESTIONS: Question[] = [
         scoringGuidance:
           "Award 1 point if the response correctly describes a negative feedback sequence: moving to dim light is detected → the iris muscles relax → the pupil dilates (gets larger) to allow more light in → this counteracts the decrease in light, helping restore adequate vision. The response must include both the stimulus (dim light) and the compensatory response (pupil dilation).",
         modelAnswer:
-          "When a person moves from bright light to dim light, the decrease in light is detected by the eye. The iris muscles relax, causing the pupil to dilate (get larger) to allow more light to enter. This response counteracts the decrease in light and helps restore adequate vision.",
+          "When a person moves from bright light to dim light, the decrease in light is detected by the eye. The iris muscles relax, causing the pupil to dilate (get larger) to allow more light to enter. This counteracts the decrease in light and helps restore adequate vision.",
       },
     ],
   },
@@ -123,7 +123,6 @@ export const QUESTIONS: Question[] = [
     dropdownLabel: "M2Q14 – Genetics and Heredity",
     standard: "3.1.9-12.P",
     topic: "Genetics and Heredity",
-    // No image and no table for this question
     stem: "Bearded dragons are a type of lizard and are popular pets for reptile keepers. Wild bearded dragons tend to be dark in color due to a protein called melanin. However, many color variations exist in the pet trade. Breeders have been able to develop bearded dragons that are bright red, orange, and yellow.",
     parts: [
       {

@@ -1,4 +1,26 @@
 {
-  "standard": "placeholder",
-  "status": "not_trained"
+  "standard": "3.1.9-12.N",
+  "item": "Module 2, Q15",
+  "question_stem": "Design, evaluate, and refine a solution for reducing the impacts of human activities on the environment and biodiversity. Green stormwater infrastructure (green roofs, rain gardens, bioswales) is being added to a community to manage stormwater runoff.",
+  "part_a": {
+    "key_concept": "Likely benefits of green stormwater infrastructure to the local ecosystem include: (1) collecting rainwater to prevent flooding and allow groundwater recharge or plant use; (2) reducing stormwater runoff pollution and erosion; (3) converting unused space (e.g., rooftop) to habitat supporting local biodiversity; (4) supporting photosynthesis (removes CO2, returns O2).",
+    "scoring_rubric": "Award 1 point if the response correctly describes a specific, plausible ecosystem benefit of green stormwater infrastructure (flooding reduction, pollution reduction, habitat creation, photosynthesis/oxygen production). Award 0 points if the response is incorrect (plants could die), too vague, or describes human benefits only without ecosystem connection.",
+    "adaptation_rules": "- Rule: If a response implies an ecosystem benefit by mentioning increased plant growth or oxygen production, and these can be reasonably linked to photosynthesis or habitat creation, award 1 point even if specific mechanisms are not detailed.  \n  Example: \"It would help more plants grow so animals would have more food and oxygen.\"  \n  Rationale: Photosynthesis and habitat creation are direct ecosystem benefits of green stormwater infrastructure. Increased plant growth implies photosynthesis, which is a key benefit, and indirectly supports habitat creation.\n\n- Rule: If a response connects plant growth to animal food supply and oxygen production, consider it as implicitly describing photosynthesis, and award 1 point if this is a plausible ecosystem benefit.  \n  Example: \"Animals would have more food and oxygen because of more plants.\"  \n  Rationale: The response suggests an understanding of the role of plants in ecosystems, particularly through photosynthesis, which is a valid benefit of green stormwater infrastructure."
+  },
+  "part_b": {
+    "key_concept": "TWO distinct measurement methods are required. Valid methods include: (1) record flooding incidents and compare to historical data; (2) measure water quality (pollutants) before/after storms; (3) measure groundwater/water table levels before/after storms; (4) measure photosynthesis (CO2/O2) in green roof/garden areas; (5) count plant/animal species in garden areas; (6) measure runoff volume in surrounding areas. Two methods that repeat the same idea (e.g., measure water on ground + measure water absorbed) count as only ONE method and earn 0 points.",
+    "scoring_rubric": "Award 1 point if the response describes TWO distinct, valid methods for measuring the effectiveness of green stormwater infrastructure. Award 0 points if only one method is described, or if two methods repeat the same underlying measurement, or if methods are too vague to be actionable.",
+    "adaptation_rules": "UPDATED ADAPTATION RULES:\n\n- Rule: [If a method is described vaguely without specifying the location or context relevant to green infrastructure] \u2192 [Score 0 points]  \n  Example: \"Analyze flower numbers in the community\" without specifying the green infrastructure areas.  \n  Rationale: Biological measurements must be context-specific to be valid. Counting plant species must occur within the designated green infrastructure areas to accurately assess the impact of the infrastructure on local biodiversity.\n\n- Rule: [If a method does not directly align with the key concept's valid methods] \u2192 [Score 0 points]  \n  Example: \"Analyze flower numbers in the community\" without clear alignment to counting species in garden areas.  \n  Rationale: Methods must directly correlate with the key concept's valid methods to ensure they measure the intended impact of green stormwater infrastructure accurately.\n\n- Rule: [If two methods are provided but one is invalid or too vague] \u2192 [Score 0 points]  \n  Example: One valid method and one vague method about flower numbers.  \n  Rationale: Both methods must be distinct and valid to ensure comprehensive evaluation of the infrastructure's effectiveness."
+  },
+  "part_c": null,
+  "metadata": {
+    "trained_on": "4 official Keystone 2025-2026 Item Sampler responses",
+    "source": "2025_keystone_biology_item_sampler",
+    "parts": [
+      "part_a",
+      "part_b"
+    ],
+    "status": "pending_teacher_review",
+    "teacher_approved": false
+  }
 }
