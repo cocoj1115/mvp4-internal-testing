@@ -57,6 +57,50 @@ interface ReflectorOutput {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
+ * Helper to parse retry-after time from OpenAI error message.
+ * Looks for "try again in Xms" and returns the milliseconds.
+ * Falls back to 5000ms if not found.
+ */
+function parseRetryAfter(errorMessage: string): number {
+  const match = errorMessage.match(/try again in (\d+)ms/i);
+  if (match && match[1]) {
+    const ms = parseInt(match[1], 10);
+    return ms + 1000; // Add 1000ms buffer
+  }
+  return 5000; // Default fallback
+}
+
+/**
+ * Helper to execute an async function with retry logic for rate limits.
+ * Retries up to 3 times on 429 errors with exponential backoff.
+ */
+async function withRateLimit<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3
+): Promise<T> {
+  let lastError: any = null;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastError = err;
+      // Check if it's a 429 rate limit error
+      if (err.status === 429 || err.error?.error?.type === "rate_limit_error") {
+        const waitMs = parseRetryAfter(err.message || err.error?.error?.message || "");
+        console.warn(
+          `Rate limit hit on attempt ${attempt}/${maxRetries}. Waiting ${waitMs}ms before retry...`
+        );
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+      } else {
+        // Non-rate-limit error, don't retry
+        throw err;
+      }
+    }
+  }
+  throw lastError;
+}
+
+/**
  * Parse a plain-text examples block (as stored in G0PartConfig.examples)
  * into an array of {response, officialScore} objects.
  *
@@ -132,6 +176,8 @@ export async function POST(req: NextRequest) {
       const send = (line: string) =>
         controller.enqueue(encoder.encode(line + "\n"));
 
+      let dataSent = false;
+
       try {
         send(`Starting GradeOpt training with ${model}...`);
 
@@ -151,56 +197,81 @@ export async function POST(req: NextRequest) {
           let prevErrorCount = Infinity;
 
           for (let iter = 1; iter <= MAX_ITERATIONS; iter++) {
+            // Add 1000ms delay between iterations to reduce rate limit hits
+            if (iter > 1) {
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+            }
+
             // ── Grader ──────────────────────────────────────────────────────
             send(
               `Part ${label} — Iteration ${iter} — Grader scoring ${examples.length} response${examples.length !== 1 ? "s" : ""}...`
             );
 
-            const graderResults = await Promise.all(
-              examples.map(async (ex) => {
-                const userContent = [
-                  `KEY CONCEPT:\n${keyConcepts}`,
-                  `RUBRIC:\n${rubric}`,
-                  adaptationRules
-                    ? `ADAPTATION RULES:\n${adaptationRules}`
-                    : "ADAPTATION RULES:\nNone yet.",
-                  `STUDENT RESPONSE:\n${ex.response}`,
-                ].join("\n\n");
+            let graderResults;
+            try {
+              graderResults = await Promise.all(
+                examples.map(async (ex) => {
+                  const userContent = [
+                    `KEY CONCEPT:\n${keyConcepts}`,
+                    `RUBRIC:\n${rubric}`,
+                    adaptationRules
+                      ? `ADAPTATION RULES:\n${adaptationRules}`
+                      : "ADAPTATION RULES:\nNone yet.",
+                    `STUDENT RESPONSE:\n${ex.response}`,
+                  ].join("\n\n");
 
-                const completion = await client.chat.completions.create({
-                  model,
-                  temperature: 0,
-                  response_format: { type: "json_object" },
-                  messages: [
-                    {
-                      role: "system",
-                      content:
-                        "You are GraderGPT. Score this student response 0 or 1 based on the " +
-                        "guideline provided. Output JSON with fields: " +
-                        '"score" (0 or 1), "reasoning" (string), "diagnosed_gap" (string), ' +
-                        '"confidence" ("high", "medium", or "low").',
-                    },
-                    { role: "user", content: userContent },
-                  ],
-                });
+                  const completion = await withRateLimit(() =>
+                    client.chat.completions.create({
+                      model: "gpt-4o",
+                      temperature: 0,
+                      response_format: { type: "json_object" },
+                      messages: [
+                        {
+                          role: "system",
+                          content:
+                            "You are GraderGPT. Score this student response 0 or 1 based on the " +
+                            "guideline provided. Output JSON with fields: " +
+                            '"score" (0 or 1), "reasoning" (string), "diagnosed_gap" (string), ' +
+                            '"confidence" ("high", "medium", or "low").',
+                        },
+                        { role: "user", content: userContent },
+                      ],
+                    })
+                  );
 
-                const parsed = JSON.parse(
-                  completion.choices[0].message.content ?? "{}"
-                ) as Partial<GraderOutput>;
+                  const rawContent = completion.choices[0].message.content ?? "";
+                  let parsed: Partial<GraderOutput>;
+                  try {
+                    parsed = JSON.parse(rawContent) as Partial<GraderOutput>;
+                  } catch (parseErr) {
+                    console.error(`Grader JSON parse failed. Raw response: ${rawContent}`);
+                    send(
+                      `Warning: GraderGPT returned invalid response, skipping this sample`
+                    );
+                    // Return null to indicate failure; we'll filter these out
+                    return null;
+                  }
 
-                const graderScore: 0 | 1 = parsed.score === 1 ? 1 : 0;
-                return {
-                  graderScore,
-                  output: {
-                    score: graderScore,
-                    reasoning: parsed.reasoning ?? "",
-                    diagnosed_gap: parsed.diagnosed_gap ?? "",
-                    confidence: parsed.confidence ?? "medium",
-                  } satisfies GraderOutput,
-                  example: ex,
-                };
-              })
-            );
+                  const graderScore: 0 | 1 = parsed.score === 1 ? 1 : 0;
+                  return {
+                    graderScore,
+                    output: {
+                      score: graderScore,
+                      reasoning: parsed.reasoning ?? "",
+                      diagnosed_gap: parsed.diagnosed_gap ?? "",
+                      confidence: parsed.confidence ?? "medium",
+                    } satisfies GraderOutput,
+                    example: ex,
+                  };
+                })
+              );
+              // Filter out null results from parse failures
+              graderResults = graderResults.filter((r): r is Exclude<typeof r, null> => r !== null);
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              send(`Part ${label} — Iteration ${iter} — Error in grader: ${msg}. Skipping iteration.`);
+              continue;
+            }
 
             // Collect mismatches.
             const errors = graderResults.filter(
@@ -242,67 +313,101 @@ export async function POST(req: NextRequest) {
               )
               .join("\n\n");
 
-            const reflectorCompletion = await client.chat.completions.create({
-              model,
-              temperature: 0,
-              response_format: { type: "json_object" },
-              messages: [
-                {
-                  role: "system",
-                  content:
-                    "You are ReflectorGPT. Analyze these grading errors and identify the shared " +
-                    "failure pattern. Propose 1-3 specific adaptation rules to fix them. " +
-                    'Output JSON with fields: "analysis" (string), "proposed_rules" (string).',
-                },
-                {
-                  role: "user",
-                  content: [
-                    `RUBRIC:\n${rubric}`,
-                    adaptationRules
-                      ? `CURRENT ADAPTATION RULES:\n${adaptationRules}`
-                      : "CURRENT ADAPTATION RULES:\nNone.",
-                    `GRADING ERRORS:\n${errorsText}`,
-                  ].join("\n\n"),
-                },
-              ],
-            });
+            let proposals: string;
+            try {
+              const reflectorCompletion = await withRateLimit(() =>
+                client.chat.completions.create({
+                  model: "gpt-4o",
+                  temperature: 0,
+                  response_format: { type: "json_object" },
+                  messages: [
+                    {
+                      role: "system",
+                      content:
+                        "You are ReflectorGPT. Analyze these grading errors and identify the shared " +
+                        "failure pattern. Propose 1-3 specific adaptation rules to fix them. " +
+                        'Output JSON with fields: "analysis" (string), "proposed_rules" (string).',
+                    },
+                    {
+                      role: "user",
+                      content: [
+                        `RUBRIC:\n${rubric}`,
+                        adaptationRules
+                          ? `CURRENT ADAPTATION RULES:\n${adaptationRules}`
+                          : "CURRENT ADAPTATION RULES:\nNone.",
+                        `GRADING ERRORS:\n${errorsText}`,
+                      ].join("\n\n"),
+                    },
+                  ],
+                })
+              );
 
-            const reflectorData = JSON.parse(
-              reflectorCompletion.choices[0].message.content ?? "{}"
-            ) as Partial<ReflectorOutput>;
-            const proposals = reflectorData.proposed_rules ?? "";
+              const rawContent = reflectorCompletion.choices[0].message.content ?? "";
+              let reflectorData: Partial<ReflectorOutput>;
+              try {
+                reflectorData = JSON.parse(rawContent) as Partial<ReflectorOutput>;
+              } catch (parseErr) {
+                console.error(`Reflector JSON parse failed. Raw response: ${rawContent}`);
+                send(
+                  `Warning: ReflectorGPT returned invalid response, skipping this iteration`
+                );
+                continue;
+              }
+              proposals = reflectorData.proposed_rules ?? "";
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              send(
+                `Part ${label} — Iteration ${iter} — Error in reflector: ${msg}. Skipping iteration.`
+              );
+              continue;
+            }
 
             // ── Refiner ──────────────────────────────────────────────────────
             send(`Part ${label} — Iteration ${iter} — Refiner updating rules...`);
 
-            const refinerCompletion = await client.chat.completions.create({
-              model,
-              temperature: 0,
-              // No response_format — REFINER outputs plain text, not JSON.
-              messages: [
-                {
-                  role: "system",
-                  content:
-                    "You are RefinerGPT. Update the adaptation rules based on the reflector's " +
-                    "proposals. Output only the updated adaptation rules as plain text. " +
-                    "Do not modify the rubric.",
-                },
-                {
-                  role: "user",
-                  content: [
-                    adaptationRules
-                      ? `CURRENT ADAPTATION RULES:\n${adaptationRules}`
-                      : "CURRENT ADAPTATION RULES:\nNone.",
-                    `REFLECTOR PROPOSALS:\n${proposals}`,
-                  ].join("\n\n"),
-                },
-              ],
-            });
+            try {
+              const refinerCompletion = await withRateLimit(() =>
+                client.chat.completions.create({
+                  model: "gpt-4o",
+                  temperature: 0,
+                  // No response_format — REFINER outputs plain text, not JSON.
+                  messages: [
+                    {
+                      role: "system",
+                      content:
+                        "You are RefinerGPT. Update the adaptation rules based on the reflector's " +
+                        "proposals. Output only the updated adaptation rules as plain text. " +
+                        "Do not modify the rubric.",
+                    },
+                    {
+                      role: "user",
+                      content: [
+                        adaptationRules
+                          ? `CURRENT ADAPTATION RULES:\n${adaptationRules}`
+                          : "CURRENT ADAPTATION RULES:\nNone.",
+                        `REFLECTOR PROPOSALS:\n${proposals}`,
+                      ].join("\n\n"),
+                    },
+                  ],
+                })
+              );
 
-            // Keep existing rules if the refiner returns nothing.
-            adaptationRules =
-              refinerCompletion.choices[0].message.content?.trim() ||
-              adaptationRules;
+              // Keep existing rules if the refiner returns nothing.
+              const refinerResponse = refinerCompletion.choices[0].message.content?.trim();
+              if (!refinerResponse) {
+                send(
+                  `Warning: RefinerGPT returned empty response, keeping current rules`
+                );
+              } else {
+                adaptationRules = refinerResponse;
+              }
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              send(
+                `Part ${label} — Iteration ${iter} — Error in refiner: ${msg}. Skipping iteration.`
+              );
+              continue;
+            }
           }
 
           gStar[label] =
@@ -312,9 +417,15 @@ export async function POST(req: NextRequest) {
 
         send("Training complete.");
         send(`DATA:${JSON.stringify(gStar)}`);
+        dataSent = true;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         send(`Error: ${msg}`);
+        // Send fallback error response if we haven't sent the normal DATA response
+        if (!dataSent) {
+          send(`DATA:${JSON.stringify({ error: "Training incomplete — please try again" })}`);
+          dataSent = true;
+        }
       } finally {
         controller.close();
       }

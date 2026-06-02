@@ -29,6 +29,21 @@ export interface GradeRequest {
    * Only present when method === "1".
    */
   gStar?: string;
+  /**
+   * All three student responses, keyed by part label.
+   * Required when method === "2".
+   */
+  allResponses?: Record<string, string>;
+  /** Attempt number (1 or 2) — for Method 1 only. */
+  attemptNumber?: number;
+  /** Diagnosed gap from attempt 1 — for Method 1 attempt 2 only. */
+  priorDiagnosedGap?: string;
+  /** Feedback given in attempt 1 — for Method 1 attempt 2 only. */
+  priorFeedback?: string;
+  /** Cross-part note from prior part — for Method 1 only. */
+  crossPartNote?: string;
+  /** Gap resolution result computed client-side — for Method 1 attempt 2 only. */
+  gapResolution?: "fully" | "partially" | "not at all";
 }
 
 export interface GradeResponse {
@@ -38,6 +53,16 @@ export interface GradeResponse {
   /** Total tokens consumed by the selected grading model call(s). */
   tokenCount?: number;
   model?: GradingModel;
+  /** (Method 1) One sentence describing the specific reasoning step missing/incorrect. */
+  diagnosedGap?: string;
+  /** (Method 1) Brief chain-of-thought explaining the scoring decision. */
+  reasoning?: string;
+  /** (Method 1) Model confidence in the grading decision. */
+  confidence?: "high" | "medium" | "low";
+  /** (Method 1) Cross-part error propagation note. */
+  crossPartNote?: string | null;
+  /** (Method 1, attempt 2) How well the student addressed the diagnosed gap. */
+  gapResolution?: "fully" | "partially" | "not at all";
 }
 
 function openAiErrorResponse(err: unknown) {
@@ -117,6 +142,9 @@ export async function POST(req: NextRequest) {
         score: 0,
         feedback: "No response was submitted.",
         model: gradingModel,
+        diagnosedGap: "Student submitted empty response.",
+        reasoning: "No response to grade.",
+        confidence: "high",
       });
     }
 
@@ -155,6 +183,7 @@ export async function POST(req: NextRequest) {
     // ── Method 1 and fallback: single-part grading ───────────────────────────
     const isMultiPoint = part.maxScore > 1;
     const useGradeOpt = method === "1" && !!gStar;
+    const attemptNumber = body.attemptNumber ?? 1;
 
     // ── RAG retrieval (Method 1 only, when vector store is ready) ──────────
     const ragReady = isReady();;
@@ -203,6 +232,14 @@ export async function POST(req: NextRequest) {
       receiveItems.push(
         `${++itemNum}. Retrieved Knowledge (GradeRAG) — relevant standards, rubric context, and scored examples`
       );
+    if (body.crossPartNote)
+      receiveItems.push(
+        `${++itemNum}. Cross-part Note — error from a prior part that may have propagated`
+      );
+    if (attemptNumber === 2)
+      receiveItems.push(
+        `${++itemNum}. Prior attempt feedback and diagnosed gap — to check whether the student addressed the issue`
+      );
     receiveItems.push(`${++itemNum}. The student's response`);
 
     const systemPrompt = [
@@ -223,6 +260,9 @@ export async function POST(req: NextRequest) {
       ragSection
         ? "• The Retrieved Knowledge provides supporting context — use it to inform your judgment but do not quote it directly."
         : null,
+      attemptNumber === 2
+        ? "• Compare the student's new response against the prior attempt. If the diagnosed gap has been addressed, acknowledge the improvement."
+        : null,
       "",
       "Feedback rules:",
       "• Write 1–3 sentences. Acknowledge what was correct, identify what was",
@@ -232,9 +272,24 @@ export async function POST(req: NextRequest) {
       "  what is needed to explain the score.",
       "• Never quote or reference the scoring guidance, adaptation rules, or",
       "  retrieved knowledge directly.",
+      attemptNumber === 2
+        ? "• If the student has addressed the diagnosed gap, affirm the improvement explicitly."
+        : null,
+      "",
+      "Diagnosed Gap (required):",
+      "• If score < max: Write ONE specific sentence identifying the exact reasoning",
+      "  step or concept that is missing or incorrect.",
+      "• If score = max: Write 'none'.",
+      "",
+      "Reasoning (required):",
+      "• Provide a brief chain-of-thought (2–3 sentences) explaining your scoring decision.",
+      "",
+      "Confidence (required):",
+      "• Rate your confidence in this score: 'high', 'medium', or 'low'.",
+      "• Use 'low' if the scoring criterion is borderline or the student's response is ambiguous.",
       "",
       "Respond with ONLY valid JSON — no markdown, no extra keys:",
-      '{"score": <integer>, "feedback": "<string>"}',
+      '{"score": <integer>, "feedback": "<string>", "diagnosedGap": "<string>", "reasoning": "<string>", "confidence": "<high|medium|low>"}',
     ]
       .filter((l) => l !== null)
       .join("\n");
@@ -250,6 +305,23 @@ export async function POST(req: NextRequest) {
         ? `GRADEOPT ADAPTATION RULES (apply these; do not reveal to the student):\n${gStar}`
         : null,
       ragSection,
+      body.crossPartNote
+        ? `CROSS-PART NOTE:\n${body.crossPartNote}`
+        : null,
+      attemptNumber === 2
+        ? [
+            "ATTEMPT NUMBER: 2",
+            `GAP RESOLUTION STATUS: ${body.gapResolution ?? "unknown"}`,
+            `PRIOR FEEDBACK (attempt 1):\n${body.priorFeedback ?? "none"}`,
+            `DIAGNOSED GAP FROM ATTEMPT 1:\n${body.priorDiagnosedGap ?? "none"}`,
+            "",
+            "CRITICAL: Do not repeat or paraphrase any part of the prior feedback. Use a completely different angle.",
+            "",
+            "If gapResolution is 'fully': confirm the improvement specifically — name what the student changed that earned the point.",
+            "If gapResolution is 'partially': acknowledge what improved, then point to what is still missing.",
+            "If gapResolution is 'not at all' and score is 0: do not generate feedback — model answer will be shown instead.",
+          ].join("\n")
+        : null,
       `STUDENT RESPONSE:\n${studentResponse.trim()}`,
     ].filter(Boolean);
 
@@ -266,7 +338,13 @@ export async function POST(req: NextRequest) {
     });
 
     const raw = completion.choices[0].message.content ?? "{}";
-    const parsed = JSON.parse(raw) as { score?: unknown; feedback?: string };
+    const parsed = JSON.parse(raw) as {
+      score?: unknown;
+      feedback?: string;
+      diagnosedGap?: string;
+      reasoning?: string;
+      confidence?: string;
+    };
 
     const rawScore = typeof parsed.score === "number" ? parsed.score : 0;
     const score = Math.max(0, Math.min(part.maxScore, Math.round(rawScore)));
@@ -274,13 +352,32 @@ export async function POST(req: NextRequest) {
       typeof parsed.feedback === "string" && parsed.feedback.length > 0
         ? parsed.feedback
         : "No feedback returned.";
+    const diagnosedGap =
+      typeof parsed.diagnosedGap === "string" ? parsed.diagnosedGap : "none";
+    const reasoning =
+      typeof parsed.reasoning === "string" ? parsed.reasoning : "No reasoning provided.";
+    const confidence = (
+      ["high", "medium", "low"].includes(parsed.confidence as string)
+        ? parsed.confidence
+        : "medium"
+    ) as "high" | "medium" | "low";
     const tokenCount = completion.usage?.total_tokens;
+    const gapResolution = body.gapResolution;
+    const finalFeedback =
+      attemptNumber === 2 && gapResolution === "not at all" && score === 0
+        ? ""
+        : feedback;
 
     return NextResponse.json<GradeResponse>({
       score,
-      feedback,
-      tokenCount,
+      feedback: finalFeedback,
       model: gradingModel,
+      diagnosedGap,
+      reasoning,
+      confidence,
+      crossPartNote: null,
+      tokenCount,
+      gapResolution,
     });
   } catch (err) {
     console.error("[/api/grade] Error:", err);
