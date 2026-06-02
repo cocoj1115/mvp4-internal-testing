@@ -1,4 +1,26 @@
 {
-  "standard": "placeholder",
-  "status": "not_trained"
+  "standard": "3.1.9-12.A",
+  "item": "Module 1, Q14",
+  "question_stem": "Construct an explanation based on evidence for how the structure of DNA determines the structure of proteins which carry out the essential functions of life through systems of specialized cells.",
+  "part_a": {
+    "key_concept": "DNA in the cell determines the order of amino acids in a protein. Accepted: DNA; mRNA sequence derived from DNA.",
+    "scoring_rubric": "Award 1 point for correctly describing the substance in the cell that determines the order of amino acids in a protein. Accepted: DNA; mRNA sequence derived from DNA. Award 0 points if the substance is incorrect or response is too vague.",
+    "adaptation_rules": ""
+  },
+  "part_b": {
+    "key_concept": "The order of amino acids affects protein structure through: (1) side chains with variable physical/chemical properties (hydrophobic, hydrophilic, charged, polar, nonpolar, disulfide bridges); (2) those properties determining how the protein folds; (3) folding determining the final 3D shape. The mechanism must be present \u2014 circular responses (order affects structure because structure depends on order) do not earn credit.",
+    "scoring_rubric": "Award 1 point if the response explains how amino acid order affects protein structure by referencing folding, side chain properties, or 3D structure as the mechanism. Award 0 points if the response is circular, only mentions mutation without explaining the folding mechanism, or restates the question.",
+    "adaptation_rules": "ADAPTATION RULES:\n\n- Rule 1: [Response mentions folding or 3D structure without side chain properties] \u2192 [Score 0 points]  \n  Example: \"The order of amino acids affects the structure of a protein because it dictates the folding pattern of the protein.\"  \n  Rationale: Understanding protein structure requires knowledge of how side chain properties (hydrophobic, hydrophilic, etc.) influence folding. Without this, the response lacks the necessary depth to demonstrate comprehension of the mechanism.\n\n- Rule 2: [Response focuses on mutations without explaining folding mechanism] \u2192 [Score 0 points]  \n  Example: \"The structure can be affected because if there was a mutation in the sequence then the structure wouldn't be the same.\"  \n  Rationale: While mutations can influence protein structure, the question specifically requires an explanation of how the amino acid sequence determines structure through folding and side chain interactions. This ensures the response addresses the core biological concept.\n\n- Rule 3: [Response includes circular reasoning without specific mechanism] \u2192 [Score 0 points]  \n  Example: \"The order affects structure because structure depends on order.\"  \n  Rationale: Circular reasoning does not provide a scientific explanation. The response must include how specific properties of amino acids lead to folding and 3D structure to demonstrate understanding of the biological mechanism."
+  },
+  "part_c": {
+    "key_concept": "A protein has a specific function determined by its structure. Specific proteins cannot perform other functions. The cell needs a variety of protein types to perform a variety of functions: catalysis, contraction, support, transport, communication, protection.",
+    "scoring_rubric": "Award 1 point if the response connects protein diversity to functional diversity \u2014 different proteins perform different functions. Award 0 points if the response is vague (proteins are important), circular, or explains cell structure without linking to protein function diversity.",
+    "adaptation_rules": ""
+  },
+  "metadata": {
+    "trained_on": "4 official Keystone 2025-2026 Item Sampler responses",
+    "source": "2025_keystone_biology_item_sampler",
+    "status": "pending_teacher_review",
+    "teacher_approved": false
+  }
 }
