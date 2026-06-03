@@ -100,6 +100,9 @@ function normalizeRequest(body: unknown): CompareRequest {
 function emptyJudgeFields() {
   return {
     judge_run: false,
+    judge_track: "" as const,
+    confirmation_clarity: "" as const,
+    scope_control: "" as const,
     task_focus: "" as const,
     specificity: "" as const,
     manageability: "" as const,
@@ -157,6 +160,8 @@ export async function POST(req: NextRequest) {
   const encoder = new TextEncoder();
   const runId = crypto.randomUUID();
 
+  const abortSignal = req.signal;
+
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const rows: RawComparisonRow[] = [];
@@ -166,16 +171,24 @@ export async function POST(req: NextRequest) {
         compareRequest.candidates.length *
         compareRequest.repeats;
       let completed = 0;
+      let stopped = false;
 
       controller.enqueue(encoder.encode(jsonLine({ type: "start", runId, total })));
 
       for (const input of compareRequest.inputs) {
+        if (stopped) break;
         const part = question.parts.find((candidate) => candidate.label === input.part);
         if (!part) continue;
 
         for (const method of compareRequest.methods) {
+          if (stopped) break;
           for (const candidate of compareRequest.candidates) {
+            if (stopped) break;
             for (let repeatIndex = 1; repeatIndex <= compareRequest.repeats; repeatIndex++) {
+              if (abortSignal.aborted) {
+                stopped = true;
+                break;
+              }
               let row: RawComparisonRow;
               const context = {
                 testCaseId: input.testCaseId,
@@ -242,13 +255,19 @@ export async function POST(req: NextRequest) {
                   const judge = await judgeFeedback({
                     questionId: "M1Q14",
                     part: input.part,
+                    taskType: part.taskType,
                     studentResponse: input.studentResponse,
                     feedback: result.feedback,
+                    aiScore: result.aiScore,
+                    maxScore: part.maxScore,
                     judge: compareRequest.judge,
                   });
                   row = {
                     ...base,
                     judge_run: true,
+                    judge_track: judge.track,
+                    confirmation_clarity: judge.confirmation_clarity ?? "",
+                    scope_control: judge.scope_control ?? "",
                     task_focus: judge.task_focus ?? "",
                     specificity: judge.specificity ?? "",
                     manageability: judge.manageability ?? "",
@@ -282,8 +301,13 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      controller.enqueue(encoder.encode(jsonLine({ type: "aggregate", rows: aggregateRows(rows) })));
-      controller.enqueue(encoder.encode(jsonLine({ type: "done", runId, total })));
+      if (stopped) {
+        controller.enqueue(encoder.encode(jsonLine({ type: "aggregate", rows: aggregateRows(rows) })));
+        controller.enqueue(encoder.encode(jsonLine({ type: "stopped" })));
+      } else {
+        controller.enqueue(encoder.encode(jsonLine({ type: "aggregate", rows: aggregateRows(rows) })));
+        controller.enqueue(encoder.encode(jsonLine({ type: "done", runId, total })));
+      }
       controller.close();
     },
   });

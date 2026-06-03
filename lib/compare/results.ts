@@ -21,6 +21,9 @@ export const CSV_COLUMNS = [
   "grading_latency_ms",
   "grading_token_count",
   "judge_run",
+  "judge_track",
+  "confirmation_clarity",
+  "scope_control",
   "task_focus",
   "specificity",
   "manageability",
@@ -28,6 +31,8 @@ export const CSV_COLUMNS = [
   "overall_quality",
   "judge_rationale",
   "judge_latency_ms",
+  "pass_confirmation_clarity",
+  "pass_scope_control",
   "pass_task_focus",
   "pass_specificity",
   "pass_manageability",
@@ -53,8 +58,18 @@ function rate(values: Array<boolean | "" | null>): number | null {
   return booleans.filter(Boolean).length / booleans.length;
 }
 
-export function passTaskFocus(value: number | ""): boolean | "" {
+// Track A
+export function passConfirmationClarity(value: number | ""): boolean | "" {
   return isNumber(value) ? value >= 3.0 : "";
+}
+
+export function passScopeControl(value: number | ""): boolean | "" {
+  return isNumber(value) ? value >= 3.0 : "";
+}
+
+// Track B
+export function passTaskFocus(value: number | ""): boolean | "" {
+  return isNumber(value) ? value >= 3.5 : "";
 }
 
 export function passSpecificity(value: number | ""): boolean | "" {
@@ -70,13 +85,28 @@ export function passAnswerLeakage(value: number | ""): boolean | "" {
 }
 
 export function passOverall(row: RawComparisonRow): boolean | "" {
-  const checks = [
-    passTaskFocus(row.task_focus),
-    passSpecificity(row.specificity),
-    passManageability(row.manageability),
-    passAnswerLeakage(row.answer_leakage),
-  ];
-  return checks.every((value) => value === true) ? true : checks.some((value) => value === "") ? "" : false;
+  if (!row.judge_run) return "";
+  if (row.judge_track === "correct") {
+    const checks: Array<boolean | ""> = [
+      passConfirmationClarity(row.confirmation_clarity),
+      passScopeControl(row.scope_control),
+    ];
+    if (checks.some((v) => v === "")) return "";
+    return checks.every((v) => v === true);
+  }
+  if (row.judge_track === "incorrect") {
+    const checks: Array<boolean | ""> = [
+      passTaskFocus(row.task_focus),
+      passSpecificity(row.specificity),
+      passManageability(row.manageability),
+    ];
+    if (row.answer_leakage !== "") {
+      checks.push(passAnswerLeakage(row.answer_leakage));
+    }
+    if (checks.some((v) => v === "")) return "";
+    return checks.every((v) => v === true);
+  }
+  return "";
 }
 
 export function aggregateRows(rows: RawComparisonRow[]): SummaryComparisonRow[] {
@@ -89,6 +119,8 @@ export function aggregateRows(rows: RawComparisonRow[]): SummaryComparisonRow[] 
   return Array.from(groups.entries())
     .map(([key, group]) => {
       const successful = group.filter((row) => row.status === "success");
+      const trackA = successful.filter((row) => row.judge_track === "correct");
+      const trackB = successful.filter((row) => row.judge_track === "incorrect");
       return {
         key,
         method: group[0].method,
@@ -98,10 +130,12 @@ export function aggregateRows(rows: RawComparisonRow[]): SummaryComparisonRow[] 
         totalRows: group.length,
         successRows: successful.length,
         scoreMatchRate: rate(successful.map((row) => row.score_match)),
-        taskFocusMean: average(successful.map((row) => row.task_focus)),
-        specificityMean: average(successful.map((row) => row.specificity)),
-        manageabilityMean: average(successful.map((row) => row.manageability)),
-        answerLeakageMean: average(successful.map((row) => row.answer_leakage)),
+        confirmationClarityMean: average(trackA.map((row) => row.confirmation_clarity)),
+        scopeControlMean: average(trackA.map((row) => row.scope_control)),
+        taskFocusMean: average(trackB.map((row) => row.task_focus)),
+        specificityMean: average(trackB.map((row) => row.specificity)),
+        manageabilityMean: average(trackB.map((row) => row.manageability)),
+        answerLeakageMean: average(trackB.map((row) => row.answer_leakage)),
         overallQualityMean: average(successful.map((row) => row.overall_quality)),
         averageLatencyMs: average(successful.map((row) => row.grading_latency_ms)),
         averageTokens: average(successful.map((row) => row.grading_token_count)),
@@ -119,6 +153,8 @@ function csvValue(value: unknown): string {
 }
 
 function csvRowValue(row: RawComparisonRow, column: CsvColumn) {
+  if (column === "pass_confirmation_clarity") return passConfirmationClarity(row.confirmation_clarity);
+  if (column === "pass_scope_control") return passScopeControl(row.scope_control);
   if (column === "pass_task_focus") return passTaskFocus(row.task_focus);
   if (column === "pass_specificity") return passSpecificity(row.specificity);
   if (column === "pass_manageability") return passManageability(row.manageability);

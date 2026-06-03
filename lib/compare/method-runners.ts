@@ -242,7 +242,7 @@ async function runMethod1(input: MethodRunInput): Promise<MethodRunResult> {
     "",
     "SCAFFOLDING FEEDBACK RULES by taskType and studentState:",
     "",
-    "The taskType for this part is: recall_identify",
+    `The taskType for this part is: ${part.taskType}`,
     "",
     "IF studentState = correct:",
     "  Write exactly 1 declarative sentence.",

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { QUESTION_MAP, PartLabel } from "@/app/lib/questions";
 import {
   COMPARE_JUDGE_MODELS,
@@ -11,8 +11,10 @@ import {
   buildComparisonCsv,
   comparisonCsvFilename,
   passAnswerLeakage,
+  passConfirmationClarity,
   passManageability,
   passOverall,
+  passScopeControl,
   passSpecificity,
   passTaskFocus,
 } from "@/lib/compare/results";
@@ -169,6 +171,8 @@ function heatColor(value: number | null) {
 function meanJudgeScore(row: SummaryComparisonRow | null) {
   if (!row) return null;
   const values = [
+    row.confirmationClarityMean,
+    row.scopeControlMean,
     row.taskFocusMean,
     row.specificityMean,
     row.manageabilityMean,
@@ -274,6 +278,7 @@ export default function ComparePage() {
   const [progress, setProgress] = useState<{ completed: number; total: number } | null>(null);
   const [currentStatus, setCurrentStatus] = useState("Idle");
   const [running, setRunning] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [error, setError] = useState("");
   const [questionContextOpen, setQuestionContextOpen] = useState(true);
   const [resultTab, setResultTab] = useState<ResultTab>("overview");
@@ -379,8 +384,14 @@ export default function ComparePage() {
     });
   }
 
+  function stopRun() {
+    abortControllerRef.current?.abort();
+  }
+
   async function runComparison() {
     if (!canRun) return;
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
     setRunning(true);
     setError("");
     setRows([]);
@@ -400,6 +411,7 @@ export default function ComparePage() {
           repeats,
           judge,
         }),
+        signal: abortController.signal,
       });
 
       if (!res.ok || !res.body) {
@@ -427,6 +439,7 @@ export default function ComparePage() {
             | { type: "aggregate"; rows: SummaryComparisonRow[] }
             | { type: "status"; stage: string; message: string }
             | { type: "start"; total: number }
+            | { type: "stopped" }
             | { type: "done" };
 
           if (event.type === "result") {
@@ -438,6 +451,9 @@ export default function ComparePage() {
             setSummaryRows(event.rows);
           } else if (event.type === "status") {
             setCurrentStatus(event.message);
+          } else if (event.type === "stopped") {
+            setCurrentStatus("Run stopped.");
+            setSummaryRows((prev) => (prev.length > 0 ? prev : aggregateRows(nextRows)));
           } else if (event.type === "done") {
             setCurrentStatus("Comparison run complete.");
           }
@@ -446,10 +462,16 @@ export default function ComparePage() {
 
       setSummaryRows((prev) => (prev.length > 0 ? prev : aggregateRows(nextRows)));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
-      setCurrentStatus("Run failed.");
+      if (err instanceof Error && err.name === "AbortError") {
+        setCurrentStatus("Run stopped.");
+        setSummaryRows((prev) => (prev.length > 0 ? prev : aggregateRows(rows)));
+      } else {
+        setError(err instanceof Error ? err.message : "Something went wrong.");
+        setCurrentStatus("Run failed.");
+      }
     } finally {
       setRunning(false);
+      abortControllerRef.current = null;
     }
   }
 
@@ -780,9 +802,6 @@ export default function ComparePage() {
                 <span className="rounded-full bg-indigo-50 px-3 py-1 font-semibold text-indigo-700">
                   {selectedCandidates.length} / {COMPARE_MODEL_CONFIGS.length} conditions selected
                 </span>
-                <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700">
-                  Claude Opus 4.8 uses Anthropic provider default temperature
-                </span>
               </div>
               <div className="mt-4 overflow-hidden rounded-xl border border-gray-200">
                 <div className="grid grid-cols-[minmax(220px,1fr)_repeat(3,96px)] bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
@@ -931,13 +950,31 @@ export default function ComparePage() {
                   <span className="font-semibold text-gray-900">{estimatedRows}</span>
                 </div>
               </div>
-              <button
-                onClick={runComparison}
-                disabled={!canRun}
-                className="mt-4 w-full rounded-xl bg-indigo-600 px-4 py-3 font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {running ? "Running..." : "Run Grading"}
-              </button>
+              {running ? (
+                <button
+                  onClick={stopRun}
+                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-3 font-semibold text-white hover:bg-rose-700"
+                >
+                  <svg
+                    className="h-4 w-4 animate-spin"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    aria-hidden="true"
+                  >
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                  </svg>
+                  Stop
+                </button>
+              ) : (
+                <button
+                  onClick={runComparison}
+                  disabled={!canRun}
+                  className="mt-4 w-full rounded-xl bg-indigo-600 px-4 py-3 font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Run Grading
+                </button>
+              )}
               {progress && (
                 <div className="mt-4 space-y-2">
                   <div className="h-2 overflow-hidden rounded-full bg-gray-200">
@@ -1252,12 +1289,23 @@ export default function ComparePage() {
                       </div>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500">
-                      <span>task {row.task_focus || "—"} ({String(passTaskFocus(row.task_focus))})</span>
-                      <span>specificity {row.specificity || "—"} ({String(passSpecificity(row.specificity))})</span>
-                      <span>manageability {row.manageability || "—"} ({String(passManageability(row.manageability))})</span>
-                      <span>leakage {row.answer_leakage || "—"} ({String(passAnswerLeakage(row.answer_leakage))})</span>
+                      {row.judge_track === "correct" ? (
+                        <>
+                          <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700">Track A</span>
+                          <span>clarity {row.confirmation_clarity || "—"} ({String(passConfirmationClarity(row.confirmation_clarity))})</span>
+                          <span>scope {row.scope_control || "—"} ({String(passScopeControl(row.scope_control))})</span>
+                        </>
+                      ) : row.judge_track === "incorrect" ? (
+                        <>
+                          <span className="rounded bg-rose-50 px-1.5 py-0.5 text-rose-700">Track B</span>
+                          <span>task {row.task_focus || "—"} ({String(passTaskFocus(row.task_focus))})</span>
+                          <span>specificity {row.specificity || "—"} ({String(passSpecificity(row.specificity))})</span>
+                          <span>manageability {row.manageability || "—"} ({String(passManageability(row.manageability))})</span>
+                          <span>leakage {row.answer_leakage || "—"} ({String(passAnswerLeakage(row.answer_leakage))})</span>
+                        </>
+                      ) : null}
                       <span>overall {row.overall_quality || "—"}</span>
-                      <span>pass {String(passOverall(row))}</span>
+                      <span>pass {passText(passOverall(row))}</span>
                     </div>
                   </div>
                 ))}
@@ -1307,14 +1355,17 @@ export default function ComparePage() {
                     <th className="px-3 py-2">Temp</th>
                     <th className="px-3 py-2">Case</th>
                     <th className="px-3 py-2">Part</th>
-                      <th className="px-3 py-2">Repeat</th>
-                      <th className="px-3 py-2">AI/Official</th>
-                      <th className="px-3 py-2">Task</th>
-                      <th className="px-3 py-2">Specificity</th>
-                      <th className="px-3 py-2">Manageability</th>
-                      <th className="px-3 py-2">Leakage</th>
-                      <th className="px-3 py-2">Overall</th>
-                      <th className="px-3 py-2">Pass</th>
+                    <th className="px-3 py-2">Repeat</th>
+                    <th className="px-3 py-2">AI/Official</th>
+                    <th className="px-3 py-2">Track</th>
+                    <th className="px-3 py-2">Clarity</th>
+                    <th className="px-3 py-2">Scope</th>
+                    <th className="px-3 py-2">Task</th>
+                    <th className="px-3 py-2">Specificity</th>
+                    <th className="px-3 py-2">Manage</th>
+                    <th className="px-3 py-2">Leakage</th>
+                    <th className="px-3 py-2">Overall</th>
+                    <th className="px-3 py-2">Pass</th>
                     <th className="px-3 py-2">Latency</th>
                     <th className="px-3 py-2">Tokens</th>
                     <th className="px-3 py-2">Status</th>
@@ -1331,6 +1382,9 @@ export default function ComparePage() {
                       <td className="px-3 py-2">{row.part}</td>
                       <td className="px-3 py-2">{row.repeat_index}</td>
                       <td className="px-3 py-2">{row.ai_score === "" ? "—" : row.ai_score}/{row.official_score}</td>
+                      <td className="px-3 py-2">{row.judge_track || "—"}</td>
+                      <td className="px-3 py-2">{row.confirmation_clarity || "—"}</td>
+                      <td className="px-3 py-2">{row.scope_control || "—"}</td>
                       <td className="px-3 py-2">{row.task_focus || "—"}</td>
                       <td className="px-3 py-2">{row.specificity || "—"}</td>
                       <td className="px-3 py-2">{row.manageability || "—"}</td>
@@ -1344,7 +1398,7 @@ export default function ComparePage() {
                   ))}
                   {rows.length === 0 && (
                     <tr>
-                      <td colSpan={17} className="px-3 py-10 text-center text-gray-400">
+                      <td colSpan={20} className="px-3 py-10 text-center text-gray-400">
                         No raw rows yet.
                       </td>
                     </tr>
