@@ -798,9 +798,6 @@ export default function ComparePage() {
                 <span className="rounded-full bg-indigo-50 px-3 py-1 font-semibold text-indigo-700">
                   {selectedCandidates.length} / {COMPARE_MODEL_CONFIGS.length} conditions selected
                 </span>
-                <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700">
-                  Claude Opus 4.8 uses Anthropic provider default temperature
-                </span>
               </div>
               <div className="mt-4 overflow-hidden rounded-xl border border-gray-200">
                 <div className="grid grid-cols-[minmax(220px,1fr)_repeat(3,96px)] bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
