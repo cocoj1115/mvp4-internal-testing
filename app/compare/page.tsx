@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { QUESTION_MAP, PartLabel } from "@/app/lib/questions";
 import {
   COMPARE_JUDGE_MODELS,
@@ -274,6 +274,7 @@ export default function ComparePage() {
   const [progress, setProgress] = useState<{ completed: number; total: number } | null>(null);
   const [currentStatus, setCurrentStatus] = useState("Idle");
   const [running, setRunning] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [error, setError] = useState("");
   const [questionContextOpen, setQuestionContextOpen] = useState(true);
   const [resultTab, setResultTab] = useState<ResultTab>("overview");
@@ -379,8 +380,14 @@ export default function ComparePage() {
     });
   }
 
+  function stopRun() {
+    abortControllerRef.current?.abort();
+  }
+
   async function runComparison() {
     if (!canRun) return;
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
     setRunning(true);
     setError("");
     setRows([]);
@@ -400,6 +407,7 @@ export default function ComparePage() {
           repeats,
           judge,
         }),
+        signal: abortController.signal,
       });
 
       if (!res.ok || !res.body) {
@@ -427,6 +435,7 @@ export default function ComparePage() {
             | { type: "aggregate"; rows: SummaryComparisonRow[] }
             | { type: "status"; stage: string; message: string }
             | { type: "start"; total: number }
+            | { type: "stopped" }
             | { type: "done" };
 
           if (event.type === "result") {
@@ -438,6 +447,9 @@ export default function ComparePage() {
             setSummaryRows(event.rows);
           } else if (event.type === "status") {
             setCurrentStatus(event.message);
+          } else if (event.type === "stopped") {
+            setCurrentStatus("Run stopped.");
+            setSummaryRows((prev) => (prev.length > 0 ? prev : aggregateRows(nextRows)));
           } else if (event.type === "done") {
             setCurrentStatus("Comparison run complete.");
           }
@@ -446,10 +458,16 @@ export default function ComparePage() {
 
       setSummaryRows((prev) => (prev.length > 0 ? prev : aggregateRows(nextRows)));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
-      setCurrentStatus("Run failed.");
+      if (err instanceof Error && err.name === "AbortError") {
+        setCurrentStatus("Run stopped.");
+        setSummaryRows((prev) => (prev.length > 0 ? prev : aggregateRows(rows)));
+      } else {
+        setError(err instanceof Error ? err.message : "Something went wrong.");
+        setCurrentStatus("Run failed.");
+      }
     } finally {
       setRunning(false);
+      abortControllerRef.current = null;
     }
   }
 
@@ -931,13 +949,22 @@ export default function ComparePage() {
                   <span className="font-semibold text-gray-900">{estimatedRows}</span>
                 </div>
               </div>
-              <button
-                onClick={runComparison}
-                disabled={!canRun}
-                className="mt-4 w-full rounded-xl bg-indigo-600 px-4 py-3 font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {running ? "Running..." : "Run Grading"}
-              </button>
+              {running ? (
+                <button
+                  onClick={stopRun}
+                  className="mt-4 w-full rounded-xl bg-rose-600 px-4 py-3 font-semibold text-white hover:bg-rose-700"
+                >
+                  Stop
+                </button>
+              ) : (
+                <button
+                  onClick={runComparison}
+                  disabled={!canRun}
+                  className="mt-4 w-full rounded-xl bg-indigo-600 px-4 py-3 font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Run Grading
+                </button>
+              )}
               {progress && (
                 <div className="mt-4 space-y-2">
                   <div className="h-2 overflow-hidden rounded-full bg-gray-200">
