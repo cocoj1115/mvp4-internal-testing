@@ -1,0 +1,1032 @@
+"use client";
+
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { QUESTION_MAP, PartLabel } from "@/app/lib/questions";
+import {
+  COMPARE_JUDGE_MODELS,
+  COMPARE_MODEL_CONFIGS,
+} from "@/lib/compare/models";
+import {
+  aggregateRows,
+  buildComparisonCsv,
+  comparisonCsvFilename,
+  passAnswerLeakage,
+  passManageability,
+  passOverall,
+  passSpecificity,
+  passTaskFocus,
+} from "@/lib/compare/results";
+import {
+  CompareInput,
+  CompareJudgeConfig,
+  CompareMethod,
+  CompareModelConfig,
+  M1Q14TestCase,
+  RawComparisonRow,
+  SummaryComparisonRow,
+} from "@/lib/compare/types";
+
+const QUESTION = QUESTION_MAP.M1Q14;
+const PARTS = ["A", "B", "C"] as const;
+const METHODS: Array<{ id: CompareMethod; label: string }> = [
+  { id: "1", label: "Method 1 · GradeOpt + RAG" },
+  { id: "2", label: "Method 2 · Two-stage" },
+  { id: "3", label: "Method 3 · Feedback-first" },
+];
+
+function QuestionImage({ src }: { src: string }) {
+  const [missing, setMissing] = useState(false);
+  if (missing) {
+    return (
+      <div className="rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 px-5 py-4 text-xs text-gray-400">
+        Place image at <code className="rounded bg-gray-100 px-1">public{src}</code>
+      </div>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt="Question diagram"
+      onError={() => setMissing(true)}
+      className="w-full rounded-lg border border-gray-200 bg-white object-contain"
+    />
+  );
+}
+
+function numeric(value: number | null | "") {
+  if (value === "" || value === null) return "—";
+  return value.toFixed(2);
+}
+
+function percent(value: number | null) {
+  if (value === null) return "—";
+  return `${Math.round(value * 100)}%`;
+}
+
+function hasOfficialScore(testCase: M1Q14TestCase) {
+  return PARTS.some((part) => typeof testCase.responses[part]?.official_score === "number");
+}
+
+function disabledReason(testCase: M1Q14TestCase) {
+  const missing = PARTS.filter((part) => typeof testCase.responses[part]?.official_score !== "number");
+  if (missing.length === PARTS.length) return "Official score required";
+  if (missing.length > 0) return `Missing official score for ${missing.join(", ")}`;
+  return "";
+}
+
+function buildPresetInputs(testCases: M1Q14TestCase[], selectedIds: Set<string>): CompareInput[] {
+  return testCases
+    .filter((testCase) => selectedIds.has(testCase.id))
+    .flatMap((testCase) =>
+      PARTS.flatMap((part) => {
+        const candidate = testCase.responses[part];
+        if (!candidate || typeof candidate.official_score !== "number" || !candidate.response.trim()) {
+          return [];
+        }
+        return [
+          {
+            questionId: "M1Q14" as const,
+            part,
+            testCaseId: testCase.id,
+            studentResponse: candidate.response.trim(),
+            officialScore: candidate.official_score,
+          },
+        ];
+      })
+    );
+}
+
+function rowsForSummary(summary: SummaryComparisonRow, rows: RawComparisonRow[]) {
+  return rows.filter(
+    (row) =>
+      row.method === summary.method &&
+      row.provider === summary.provider &&
+      row.model === summary.model &&
+      row.temperature === summary.temperature
+  );
+}
+
+function groupModelConfigs() {
+  const groups = new Map<
+    string,
+    {
+      key: string;
+      provider: string;
+      modelId: string;
+      label: string;
+      configs: CompareModelConfig[];
+    }
+  >();
+
+  for (const config of COMPARE_MODEL_CONFIGS) {
+    const key = `${config.provider}:${config.modelId}`;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.configs.push(config);
+    } else {
+      groups.set(key, {
+        key,
+        provider: config.provider,
+        modelId: config.modelId,
+        label: config.label.replace(/\s·\stemp\s.+$/, ""),
+        configs: [config],
+      });
+    }
+  }
+
+  return Array.from(groups.values());
+}
+
+function downloadCsv(rows: RawComparisonRow[]) {
+  const csv = buildComparisonCsv(rows);
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = comparisonCsvFilename("all");
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+function providerLabel(provider: string) {
+  if (provider === "openai") return "OpenAI";
+  if (provider === "anthropic") return "Claude";
+  if (provider === "google") return "Gemini";
+  return provider;
+}
+
+export default function ComparePage() {
+  const [testCases, setTestCases] = useState<M1Q14TestCase[]>([]);
+  const [selectedTestCaseIds, setSelectedTestCaseIds] = useState<Set<string>>(new Set());
+  const [expandedTestCaseIds, setExpandedTestCaseIds] = useState<Set<string>>(new Set());
+  const [selectedMethods, setSelectedMethods] = useState<Set<CompareMethod>>(
+    new Set<CompareMethod>(["1", "2", "3"])
+  );
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<Set<string>>(
+    new Set(COMPARE_MODEL_CONFIGS.map((config) => config.id))
+  );
+  const [repeats, setRepeats] = useState(5);
+  const [judge, setJudge] = useState<CompareJudgeConfig>({
+    provider: "openai",
+    modelId: "gpt-5.4",
+  });
+  const [includeCustom, setIncludeCustom] = useState(false);
+  const [customResponses, setCustomResponses] = useState<Record<PartLabel, string>>({
+    A: "",
+    B: "",
+    C: "",
+  });
+  const [customOfficialScores, setCustomOfficialScores] = useState<Record<PartLabel, string>>({
+    A: "",
+    B: "",
+    C: "",
+  });
+  const [rows, setRows] = useState<RawComparisonRow[]>([]);
+  const [summaryRows, setSummaryRows] = useState<SummaryComparisonRow[]>([]);
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+  const [progress, setProgress] = useState<{ completed: number; total: number } | null>(null);
+  const [currentStatus, setCurrentStatus] = useState("Idle");
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState("");
+  const [questionContextOpen, setQuestionContextOpen] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/compare-feedback")
+      .then((res) => res.json())
+      .then((data: { testCases?: M1Q14TestCase[] }) => {
+        if (!cancelled) setTestCases(data.testCases ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setTestCases([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const selectedCandidates = useMemo(
+    () => COMPARE_MODEL_CONFIGS.filter((config) => selectedCandidateIds.has(config.id)),
+    [selectedCandidateIds]
+  );
+
+  const presetInputs = useMemo(
+    () => buildPresetInputs(testCases, selectedTestCaseIds),
+    [testCases, selectedTestCaseIds]
+  );
+
+  const customInputs = useMemo<CompareInput[]>(() => {
+    if (!includeCustom) return [];
+    const inputs: CompareInput[] = [];
+    for (const part of PARTS) {
+      const partDef = QUESTION.parts.find((candidate) => candidate.label === part);
+      const score = Number(customOfficialScores[part]);
+      const response = customResponses[part].trim();
+      if (
+        !partDef ||
+        !response ||
+        !Number.isFinite(score) ||
+        score < 0 ||
+        score > partDef.maxScore
+      ) {
+        return [];
+      }
+      inputs.push({
+        questionId: "M1Q14",
+        part,
+        testCaseId: "custom",
+        studentResponse: response,
+        officialScore: score,
+      });
+    }
+    return inputs;
+  }, [customOfficialScores, customResponses, includeCustom]);
+
+  const allInputs = useMemo(
+    () => [...presetInputs, ...customInputs],
+    [customInputs, presetInputs]
+  );
+
+  const estimatedRows =
+    allInputs.length * selectedMethods.size * selectedCandidates.length * repeats;
+  const customComplete = !includeCustom || customInputs.length === PARTS.length;
+  const canRun =
+    allInputs.length > 0 &&
+    customComplete &&
+    selectedMethods.size > 0 &&
+    selectedCandidates.length > 0 &&
+    repeats >= 1 &&
+    repeats <= 10 &&
+    !running;
+
+  function toggleMethod(method: CompareMethod) {
+    setSelectedMethods((prev) => {
+      const next = new Set(prev);
+      if (next.has(method)) next.delete(method);
+      else next.add(method);
+      return next;
+    });
+  }
+
+  function toggleCandidate(id: string) {
+    setSelectedCandidateIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleTestCase(id: string) {
+    setSelectedTestCaseIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function runComparison() {
+    if (!canRun) return;
+    setRunning(true);
+    setError("");
+    setRows([]);
+    setSummaryRows([]);
+    setProgress({ completed: 0, total: estimatedRows });
+    setCurrentStatus("Starting comparison run...");
+
+    try {
+      const res = await fetch("/api/compare-feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          questionId: "M1Q14",
+          inputs: allInputs,
+          methods: Array.from(selectedMethods),
+          candidates: selectedCandidates,
+          repeats,
+          judge,
+        }),
+      });
+
+      if (!res.ok || !res.body) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error ?? "Comparison request failed.");
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      const nextRows: RawComparisonRow[] = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const event = JSON.parse(line) as
+            | { type: "result"; row: RawComparisonRow }
+            | { type: "progress"; completed: number; total: number }
+            | { type: "aggregate"; rows: SummaryComparisonRow[] }
+            | { type: "status"; stage: string; message: string }
+            | { type: "start"; total: number }
+            | { type: "done" };
+
+          if (event.type === "result") {
+            nextRows.push(event.row);
+            setRows([...nextRows]);
+          } else if (event.type === "progress") {
+            setProgress({ completed: event.completed, total: event.total });
+          } else if (event.type === "aggregate") {
+            setSummaryRows(event.rows);
+          } else if (event.type === "status") {
+            setCurrentStatus(event.message);
+          } else if (event.type === "done") {
+            setCurrentStatus("Comparison run complete.");
+          }
+        }
+      }
+
+      setSummaryRows((prev) => (prev.length > 0 ? prev : aggregateRows(nextRows)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+      setCurrentStatus("Run failed.");
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  const liveSummary = summaryRows.length > 0 ? summaryRows : aggregateRows(rows);
+  const modelGroups = useMemo(() => groupModelConfigs(), []);
+  const liveRows = rows.slice(-12).reverse();
+
+  function toggleTestCaseDetails(id: string) {
+    setExpandedTestCaseIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  return (
+    <main className="min-h-screen bg-gray-50 text-gray-900">
+      <div className="mx-auto max-w-7xl px-4 py-8 space-y-6">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.25em] text-indigo-600">
+              BioBridge Evaluation
+            </p>
+            <h1 className="mt-2 text-3xl font-bold tracking-tight">Feedback Comparison Workbench</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600">
+              Compare Method 1, Method 2, and Method 3 feedback across model-temperature combinations for M1Q14.
+            </p>
+          </div>
+          <a
+            href="/"
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            Back to student flow
+          </a>
+        </div>
+
+        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex gap-3 border-b border-gray-100 pb-4">
+            <button
+              type="button"
+              onClick={() => setQuestionContextOpen((value) => !value)}
+              className="mt-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-500 transition hover:bg-gray-50"
+              aria-expanded={questionContextOpen}
+              aria-label={questionContextOpen ? "Collapse question context" : "Expand question context"}
+            >
+              <svg
+                className={`h-4 w-4 transition-transform ${questionContextOpen ? "rotate-90" : ""}`}
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M7.2 4.8a1 1 0 0 1 1.4 0l4.5 4.5a1 1 0 0 1 0 1.4l-4.5 4.5a1 1 0 1 1-1.4-1.4l3.8-3.8-3.8-3.8a1 1 0 0 1 0-1.4Z" />
+              </svg>
+            </button>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="rounded bg-indigo-50 px-2 py-1 font-semibold text-indigo-700">
+                  {QUESTION.id}
+                </span>
+                <span className="text-gray-500">Standard {QUESTION.standard}</span>
+                <span className="text-gray-400">·</span>
+                <span className="text-gray-600">{QUESTION.topic}</span>
+              </div>
+              <div className="mt-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <h2 className="text-lg font-semibold text-gray-900">Question Context</h2>
+                <span className="text-xs text-gray-400">
+                  {questionContextOpen ? "Full context shown" : "Collapsed to stem only"}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {!questionContextOpen ? (
+            <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Stem</p>
+              <p className="mt-2 text-sm leading-6 text-gray-700">{QUESTION.stem}</p>
+            </div>
+          ) : (
+            <div className="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Stem and diagram</p>
+                <p className="mt-3 text-sm leading-6 text-gray-700">{QUESTION.stem}</p>
+                {QUESTION.imageUrl && (
+                  <div className="mt-4">
+                    <QuestionImage src={QUESTION.imageUrl} />
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Part prompts</p>
+                <div className="mt-3 space-y-3">
+                  {QUESTION.parts.map((part) => (
+                    <div key={part.label} className="rounded-xl border border-gray-200 bg-white p-4">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-sm font-bold text-white">
+                          {part.label}
+                        </span>
+                        <p className="text-sm font-semibold text-gray-700">Part {part.label}</p>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-gray-600">{part.prompt}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+
+        <div className="space-y-6">
+          <section className="space-y-6">
+            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-lg font-semibold">Test Cases</h2>
+                <span className="text-xs text-gray-500">{testCases.length} loaded</span>
+              </div>
+              {testCases.length === 0 ? (
+                <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                  No preset test cases yet.
+                </p>
+              ) : (
+                <div className="mt-4 grid gap-3">
+                  {testCases.map((testCase) => {
+                    const disabled = !hasOfficialScore(testCase);
+                    const reason = disabledReason(testCase);
+                    const expanded = expandedTestCaseIds.has(testCase.id);
+                    return (
+                      <div
+                        key={testCase.id}
+                        className={`rounded-xl border p-4 ${
+                          disabled
+                            ? "border-gray-200 bg-gray-50 opacity-60"
+                            : "border-gray-300 bg-white hover:border-indigo-300"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            disabled={disabled}
+                            checked={selectedTestCaseIds.has(testCase.id)}
+                            onChange={() => toggleTestCase(testCase.id)}
+                            className="mt-1 h-4 w-4"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-semibold">{testCase.label}</span>
+                                {reason && (
+                                  <span className="rounded bg-amber-50 px-2 py-0.5 text-xs text-amber-700">
+                                    {reason}
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => toggleTestCaseDetails(testCase.id)}
+                                className="self-start rounded-lg border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50 md:self-auto"
+                              >
+                                {expanded ? "Hide responses" : "Show responses"}
+                              </button>
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
+                              {PARTS.map((part) => (
+                                <span key={part} className="rounded bg-gray-50 px-2 py-1">
+                                  Part {part}:{" "}
+                                  {typeof testCase.responses[part]?.official_score === "number"
+                                    ? `score ${testCase.responses[part]?.official_score}`
+                                    : "score required"}
+                                </span>
+                              ))}
+                            </div>
+                            {expanded && (
+                              <div className="mt-3 grid gap-3">
+                              {PARTS.map((part) => (
+                                <div key={part} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span className="text-xs font-semibold text-indigo-600">Part {part}</span>
+                                    <span className="text-xs text-gray-500">
+                                      {typeof testCase.responses[part]?.official_score === "number"
+                                        ? `Official score: ${testCase.responses[part]?.official_score}`
+                                        : "Official score required"}
+                                    </span>
+                                  </div>
+                                  <p className="mt-1 text-sm leading-5 text-gray-600">
+                                    {testCase.responses[part]?.response ?? "No response provided."}
+                                  </p>
+                                </div>
+                              ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={includeCustom}
+                    onChange={(event) => setIncludeCustom(event.target.checked)}
+                    className="mt-1 h-4 w-4"
+                  />
+                  <span>
+                    <span className="block font-semibold text-gray-900">Custom Test Case</span>
+                    <span className="mt-0.5 block text-sm text-gray-500">
+                      Enter Part A, B, and C responses with official scores.
+                    </span>
+                  </span>
+                </label>
+              {includeCustom && (
+                <div className="mt-4 grid gap-4">
+                  {PARTS.map((part) => {
+                    const partDef = QUESTION.parts.find((candidate) => candidate.label === part);
+                    return (
+                      <div key={part} className="rounded-lg border border-gray-200 bg-white p-4">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                          <p className="text-sm font-semibold text-indigo-600">Part {part}</p>
+                          <label className="text-sm">
+                            <span className="mr-2 text-gray-600">Official score</span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={partDef?.maxScore ?? 1}
+                              step={1}
+                              value={customOfficialScores[part]}
+                              onChange={(event) =>
+                                setCustomOfficialScores((prev) => ({
+                                  ...prev,
+                                  [part]: event.target.value,
+                                }))
+                              }
+                              className="w-24 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-gray-900"
+                            />
+                          </label>
+                        </div>
+                        <textarea
+                          value={customResponses[part]}
+                          onChange={(event) =>
+                            setCustomResponses((prev) => ({
+                              ...prev,
+                              [part]: event.target.value,
+                            }))
+                          }
+                          rows={3}
+                          placeholder={`Enter the custom response for Part ${part}...`}
+                          className="mt-3 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold">Model × Temperature Matrix</h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Select the exact model-temperature conditions to compare. Each checked cell runs once per method, part, test case, and repeat.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setSelectedCandidateIds(new Set(COMPARE_MODEL_CONFIGS.map((config) => config.id)))}
+                    className="rounded border border-gray-300 px-3 py-1 text-xs hover:bg-gray-50"
+                  >
+                    Select all
+                  </button>
+                  <button
+                    onClick={() => setSelectedCandidateIds(new Set())}
+                    className="rounded border border-gray-300 px-3 py-1 text-xs hover:bg-gray-50"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full bg-indigo-50 px-3 py-1 font-semibold text-indigo-700">
+                  {selectedCandidates.length} / {COMPARE_MODEL_CONFIGS.length} conditions selected
+                </span>
+              </div>
+              <div className="mt-4 overflow-hidden rounded-xl border border-gray-200">
+                <div className="grid grid-cols-[minmax(220px,1fr)_repeat(3,96px)] bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  <span>Model</span>
+                  <span className="text-center">Temp 0</span>
+                  <span className="text-center">Temp 0.5</span>
+                  <span className="text-center">Temp 1</span>
+                </div>
+                <div className="divide-y divide-gray-100 bg-white">
+                  {modelGroups.map((group) => {
+                    const configsByTemp = new Map(group.configs.map((config) => [config.temperature, config]));
+                    return (
+                      <div key={group.key} className="grid grid-cols-[minmax(220px,1fr)_repeat(3,96px)] items-center px-4 py-3">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-800">{group.label}</p>
+                          <p className="text-xs text-gray-400">
+                            {providerLabel(group.provider)} · {group.modelId}
+                          </p>
+                        </div>
+                        {[0, 0.5, 1].map((temperature) => {
+                          const config = configsByTemp.get(temperature);
+                          return (
+                            <label key={temperature} className="flex justify-center">
+                              {config ? (
+                                <span
+                                  className={`inline-flex h-9 w-14 items-center justify-center rounded-lg border ${
+                                    selectedCandidateIds.has(config.id)
+                                      ? "border-indigo-300 bg-indigo-50 text-indigo-700"
+                                      : "border-gray-200 bg-white text-gray-400"
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedCandidateIds.has(config.id)}
+                                    onChange={() => toggleCandidate(config.id)}
+                                    className="h-4 w-4"
+                                    aria-label={`${group.label} temperature ${temperature}`}
+                                  />
+                                </span>
+                              ) : (
+                                <span className="text-xs text-gray-300">—</span>
+                              )}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">Run Settings</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Choose methods, repeats, and judge model before starting the comparison run.
+              </p>
+            </div>
+            <span className="text-xs text-gray-400">Judge temperature is fixed at 0</span>
+          </div>
+
+          <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Configuration
+              </p>
+              <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(240px,0.9fr)_minmax(320px,1fr)]">
+                <div>
+                  <p className="mb-3 text-sm font-medium text-gray-700">Methods</p>
+                  <div className="space-y-3">
+                    {METHODS.map((method) => (
+                      <label
+                        key={method.id}
+                        className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedMethods.has(method.id)}
+                          onChange={() => toggleMethod(method.id)}
+                          className="h-4 w-4"
+                        />
+                        <span>{method.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid content-start gap-4">
+                  <label className="block text-sm">
+                    <span className="mb-1 block font-medium text-gray-700">Repeats</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={10}
+                      value={repeats}
+                      onChange={(event) => setRepeats(Number(event.target.value))}
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900"
+                    />
+                    <span className="mt-1 block text-xs text-gray-400">Default 5, max 10.</span>
+                  </label>
+
+                  <label className="block text-sm">
+                    <span className="mb-1 block font-medium text-gray-700">Judge model</span>
+                    <select
+                      value={`${judge.provider}:${judge.modelId}`}
+                      onChange={(event) => {
+                        const [provider, modelId] = event.target.value.split(":");
+                        setJudge({ provider: provider as CompareJudgeConfig["provider"], modelId });
+                      }}
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900"
+                    >
+                      {COMPARE_JUDGE_MODELS.map((model) => (
+                        <option key={`${model.provider}:${model.modelId}`} value={`${model.provider}:${model.modelId}`}>
+                          {model.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Run
+              </p>
+              <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-600">
+                <div className="flex justify-between gap-4">
+                  <span>Inputs</span>
+                  <span className="font-semibold text-gray-900">{allInputs.length}</span>
+                </div>
+                <div className="mt-2 flex justify-between gap-4">
+                  <span>Model-temperature candidates</span>
+                  <span className="font-semibold text-gray-900">{selectedCandidates.length}</span>
+                </div>
+                <div className="mt-2 flex justify-between gap-4">
+                  <span>Feedback rows</span>
+                  <span className="font-semibold text-gray-900">{estimatedRows}</span>
+                </div>
+                <div className="mt-2 flex justify-between gap-4">
+                  <span>Judge calls</span>
+                  <span className="font-semibold text-gray-900">{estimatedRows}</span>
+                </div>
+              </div>
+              <button
+                onClick={runComparison}
+                disabled={!canRun}
+                className="mt-4 w-full rounded-xl bg-indigo-600 px-4 py-3 font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {running ? "Running..." : "Run Grading"}
+              </button>
+              {progress && (
+                <div className="mt-4 space-y-2">
+                  <div className="h-2 overflow-hidden rounded-full bg-gray-200">
+                    <div
+                      className="h-full bg-indigo-600 transition-all"
+                      style={{ width: `${progress.total ? (progress.completed / progress.total) * 100 : 0}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    {progress.completed} / {progress.total} rows completed
+                  </p>
+                </div>
+              )}
+              <div className="mt-4 rounded-lg border border-indigo-100 bg-indigo-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-indigo-500">
+                  Current process
+                </p>
+                <p className="mt-1 text-sm leading-5 text-indigo-800">{currentStatus}</p>
+              </div>
+              {error && (
+                <p className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+                  {error}
+                </p>
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">Results</h2>
+              <p className="text-sm text-gray-500">{rows.length} raw rows</p>
+            </div>
+            <button
+              onClick={() => downloadCsv(rows)}
+              disabled={rows.length === 0}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Export CSV
+            </button>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+            <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900">Latest Generated Feedback</h3>
+                <p className="text-xs text-gray-500">
+                  Updates as each model/method/repeat finishes. Full detail is also available by expanding summary rows below.
+                </p>
+              </div>
+              <span className="text-xs text-gray-400">
+                Showing latest {Math.min(liveRows.length, 12)} rows
+              </span>
+            </div>
+            {liveRows.length === 0 ? (
+              <p className="mt-4 rounded-lg border border-dashed border-gray-200 bg-white p-4 text-sm text-gray-400">
+                Generated feedback will appear here while the run is in progress.
+              </p>
+            ) : (
+              <div className="mt-4 max-h-[32rem] space-y-3 overflow-y-auto">
+                {liveRows.map((row, index) => (
+                  <div
+                    key={`${row.run_id}-${row.test_case_id}-${row.part}-${row.method}-${row.model}-${row.temperature}-${row.repeat_index}-${index}`}
+                    className="rounded-xl border border-gray-200 bg-white p-4"
+                  >
+                    <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="rounded bg-indigo-50 px-2 py-1 font-semibold text-indigo-700">
+                          Method {row.method}
+                        </span>
+                        <span className="rounded bg-gray-100 px-2 py-1 text-gray-600">
+                          {providerLabel(row.provider)} · {row.model}
+                        </span>
+                        <span className="rounded bg-gray-100 px-2 py-1 text-gray-600">
+                          temp {row.temperature}
+                        </span>
+                        <span className="rounded bg-gray-100 px-2 py-1 text-gray-600">
+                          repeat {row.repeat_index}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="text-gray-500">
+                          {row.test_case_id} · Part {row.part}
+                        </span>
+                        <span
+                          className={`rounded px-2 py-1 font-semibold ${
+                            row.status === "success"
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-rose-50 text-rose-700"
+                          }`}
+                        >
+                          {row.status}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+                      <div className="rounded-lg bg-gray-50 p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                          Student Response
+                        </p>
+                        <p className="mt-1 text-sm leading-5 text-gray-600">{row.student_response}</p>
+                        <p className="mt-2 text-xs text-gray-500">
+                          AI score: {row.ai_score === "" ? "—" : row.ai_score} / Official: {row.official_score}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-gray-200 bg-white p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                          Generated Feedback
+                        </p>
+                        {row.feedback ? (
+                          <p className="mt-1 text-sm leading-6 text-gray-700">{row.feedback}</p>
+                        ) : (
+                          <p className="mt-1 text-sm text-gray-400">No feedback generated.</p>
+                        )}
+                        {row.error && <p className="mt-2 text-xs text-rose-600">{row.error}</p>}
+                        {row.judge_rationale && (
+                          <p className="mt-2 text-xs leading-5 text-gray-400">
+                            Judge rationale: {row.judge_rationale}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-6 overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="text-xs uppercase tracking-wider text-gray-500">
+                <tr>
+                  <th className="px-3 py-2">Config</th>
+                  <th className="px-3 py-2">Rows</th>
+                  <th className="px-3 py-2">Score Match</th>
+                  <th className="px-3 py-2">Task</th>
+                  <th className="px-3 py-2">Specificity</th>
+                  <th className="px-3 py-2">Manageability</th>
+                  <th className="px-3 py-2">Leakage</th>
+                  <th className="px-3 py-2">Overall</th>
+                  <th className="px-3 py-2">Pass</th>
+                  <th className="px-3 py-2">Latency</th>
+                  <th className="px-3 py-2">Tokens</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {liveSummary.map((summary) => {
+                  const expanded = expandedKeys.has(summary.key);
+                  const detailRows = rowsForSummary(summary, rows);
+                  return (
+                    <Fragment key={summary.key}>
+                      <tr
+                        key={summary.key}
+                        className="cursor-pointer hover:bg-gray-50/50"
+                        onClick={() =>
+                          setExpandedKeys((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(summary.key)) next.delete(summary.key);
+                            else next.add(summary.key);
+                            return next;
+                          })
+                        }
+                      >
+                        <td className="px-3 py-3">
+                          <p className="font-medium">Method {summary.method} · {summary.model}</p>
+                          <p className="text-xs text-gray-400">{summary.provider} · temp {summary.temperature}</p>
+                        </td>
+                        <td className="px-3 py-3">{summary.successRows}/{summary.totalRows}</td>
+                        <td className="px-3 py-3">{percent(summary.scoreMatchRate)}</td>
+                        <td className="px-3 py-3">{numeric(summary.taskFocusMean)}</td>
+                        <td className="px-3 py-3">{numeric(summary.specificityMean)}</td>
+                        <td className="px-3 py-3">{numeric(summary.manageabilityMean)}</td>
+                        <td className="px-3 py-3">{numeric(summary.answerLeakageMean)}</td>
+                        <td className="px-3 py-3 font-semibold text-indigo-700">{numeric(summary.overallQualityMean)}</td>
+                        <td className="px-3 py-3">{percent(summary.passOverallRate)}</td>
+                        <td className="px-3 py-3">{summary.averageLatencyMs ? Math.round(summary.averageLatencyMs) : "—"} ms</td>
+                        <td className="px-3 py-3">{summary.averageTokens ? Math.round(summary.averageTokens) : "—"}</td>
+                      </tr>
+                      {expanded && (
+                        <tr>
+                          <td colSpan={11} className="bg-gray-50 px-3 py-3">
+                            <div className="max-h-96 space-y-3 overflow-y-auto">
+                              {detailRows.map((row, index) => (
+                                <div key={`${row.run_id}-${row.test_case_id}-${row.part}-${row.repeat_index}-${index}`} className="rounded-lg border border-gray-200 bg-white p-3">
+                                  <div className="flex flex-wrap gap-2 text-xs text-gray-500">
+                                    <span>{row.test_case_id}</span>
+                                    <span>Part {row.part}</span>
+                                    <span>repeat {row.repeat_index}</span>
+                                    <span>{row.status}</span>
+                                    <span>score {row.ai_score === "" ? "—" : row.ai_score}/{row.official_score}</span>
+                                  </div>
+                                  {row.error && <p className="mt-2 text-xs text-rose-600">{row.error}</p>}
+                                  {row.feedback && <p className="mt-2 text-sm text-gray-700">{row.feedback}</p>}
+                                  {row.judge_rationale && (
+                                    <p className="mt-2 text-xs text-gray-400">Judge: {row.judge_rationale}</p>
+                                  )}
+                                  <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                                    <span>task {row.task_focus || "—"} ({String(passTaskFocus(row.task_focus))})</span>
+                                    <span>specificity {row.specificity || "—"} ({String(passSpecificity(row.specificity))})</span>
+                                    <span>manageability {row.manageability || "—"} ({String(passManageability(row.manageability))})</span>
+                                    <span>leakage {row.answer_leakage || "—"} ({String(passAnswerLeakage(row.answer_leakage))})</span>
+                                    <span>overall pass {String(passOverall(row))}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+                {liveSummary.length === 0 && (
+                  <tr>
+                    <td colSpan={11} className="px-3 py-10 text-center text-gray-400">
+                      No results yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+}

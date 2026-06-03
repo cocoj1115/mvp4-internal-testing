@@ -1,1 +1,74 @@
-[]
+[
+  {
+    "id": "student_1",
+    "label": "Student 1",
+    "responses": {
+      "A": {
+        "response": "The substance in the cell that determines the order of amino acids is DNA.",
+        "official_score": 1
+      },
+      "B": {
+        "response": "The order of amino acids affects the structure of a protein because it dictates the folding pattern of the protein, which changes it's shape and function. Amino acids also determine the 3-dimensional structure of a protein, so the order will change that.",
+        "official_score": 1
+      },
+      "C": {
+        "response": "Having many types of proteins is important for a cell because each serve a different unique function in the body. They are needed for biological processes like cell signaling and metabolism. Different proteins have different structures and functions, allowing them to carry out tasks efficiently in a cell.",
+        "official_score": 1
+      }
+    }
+  },
+  {
+    "id": "student_2",
+    "label": "Student 2",
+    "responses": {
+      "A": {
+        "response": "the amino acids are determined by the mRNA sequence that comes from the DNA to the RNA.",
+        "official_score": 1
+      },
+      "B": {
+        "response": "the stucture can be affected beause if there was a mutation in the sequence then the structure wouldnt be the same unless the mutation would be a silent mutation.",
+        "official_score": 1
+      },
+      "C": {
+        "response": "it helps to build the cells up and crete the shapes of cells to build up the space provided by the groups of amino acids.",
+        "official_score": 0
+      }
+    }
+  },
+  {
+    "id": "student_3",
+    "label": "Student 3",
+    "responses": {
+      "A": {
+        "response": "The DNA sequece determinds the order of amino acids.",
+        "official_score": 1
+      },
+      "B": {
+        "response": "The amino acid sequence affects the structure of a protein because how ever the amino acid sequence is determines the structure of a protein.",
+        "official_score": 0
+      },
+      "C": {
+        "response": "Many types of proteins is good for the cell because different parts of the cell needs different proteins.",
+        "official_score": 0
+      }
+    }
+  },
+  {
+    "id": "student_4",
+    "label": "Student 4",
+    "responses": {
+      "A": {
+        "response": "the substance that determines the order of amino acid proteins is the carboxylic it see exactly how much needs to be in the cell order",
+        "official_score": 0
+      },
+      "B": {
+        "response": "the structure of the amino acids affect the structure of a protein because if it doesnt have the right amount of genes it could come out as a totally different organism",
+        "official_score": 0
+      },
+      "C": {
+        "response": "having many tupes of proteins is important because it determines what kind of cell the proteins make. if one thing is off then the cell will be a totally different cell than what is supposed to be made.",
+        "official_score": 0
+      }
+    }
+  }
+]
