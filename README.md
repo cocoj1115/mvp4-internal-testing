@@ -10,44 +10,6 @@ This is an internal prototype for testing three feedback generation methods for 
 - `method-3` — Error-aware feedback-first grading with Keystone boundary examples (forced order: error analysis → feedback → score → confidence)
 - `eval-dashboard` — evaluation harness: batch test cases, LLM judge scoring, and CSV export
 
-## How to Test a Method
-
-### Method 1 (GradeOpt + RAG)
-1. Switch to branch `method-1`: `git checkout method-1`
-2. Run `npm run dev`
-3. Select a question from the dropdown
-4. Select Method 1
-5. Upload the Keystone scoring PDF (KD1 + KD2 + KE can be in one file)
-6. Review and confirm the extracted G0 (key concepts + rubrics)
-7. Run GradeOpt training — watch the streaming log
-8. Review and approve the generated Adaptation Rules (G*)
-9. Answer Part A, B, C and observe scores + feedback
-10. Try Attempt 2 to see gap resolution
-
-### Eval Dashboard
-1. Switch to branch `eval-dashboard`: `git checkout eval-dashboard`
-2. Run `npm run dev`
-3. Select a question and method
-4. Load preset test cases or enter student responses manually
-5. Click **Run Grading** — all parts are graded in one batch; a `run_id` ties the rows together
-6. Optionally enable the **LLM Judge** to score each feedback string on five dimensions (task_focus, specificity, manageability, answer_leakage, overall_quality) — see `skills/Ref1-FeedbackRubric.md`
-7. Click **Export CSV** to download results — see `skills/Ref2-CSVExport.md` for column definitions and pass thresholds
-
-### Method 2 and 3
-1. Switch to the relevant branch: `git checkout method-2` or `git checkout method-3`
-2. Run `npm run dev`
-3. Select a question and the method
-4. Answer directly — no setup required
-5. Observe scores + feedback
-
-## How to Add a New Method
-1. Create a new branch from main: `git checkout -b method-4`
-2. In `app/api/grade/route.ts`, add a new case for `method === "4"`
-3. Implement your scoring and feedback logic in `lib/methods/method4.ts`
-4. In `app/page.tsx`, add Method 4 to the method selector
-5. Test locally with `npm run dev`
-6. Push the branch: `git push origin method-4`
-
 ## Environment Setup
 1. Copy `.env.local.example` to `.env.local`
 2. Add your OpenAI API key: `OPENAI_API_KEY=your_key_here`
