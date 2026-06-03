@@ -7,24 +7,9 @@ export const GRADING_MODELS = [
     note: "Default",
   },
   {
-    id: "gpt-4.1",
-    label: "GPT-4.1",
+    id: "gpt-5.4-mini",
+    label: "GPT-5.4 mini",
     note: "Fallback",
-  },
-  {
-    id: "gpt-4.1-mini",
-    label: "GPT-4.1 mini",
-    note: "Faster / cheaper",
-  },
-  {
-    id: "gpt-4o-mini",
-    label: "GPT-4o mini",
-    note: "Lowest cost",
-  },
-  {
-    id: "gpt-4o",
-    label: "GPT-4o",
-    note: "Baseline",
   },
 ] as const;
 

@@ -493,7 +493,11 @@ function QuestionPlayer({
   const [session, setSession] = useState<SessionState>(() => {
     try {
       const stored = localStorage.getItem(`biobridge_session_${question.id}`);
-      if (stored) return JSON.parse(stored) as SessionState;
+      if (stored) {
+        const parsed = JSON.parse(stored) as SessionState;
+        parsed.method = method;
+        return parsed;
+      }
     } catch { /* ignore */ }
     return initSession(question, method);
   });
