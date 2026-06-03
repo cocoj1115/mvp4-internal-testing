@@ -159,10 +159,10 @@ function providerLabel(provider: string) {
 
 function heatColor(value: number | null) {
   if (value === null) return "border-gray-200 bg-gray-50 text-gray-400";
-  if (value >= 2.75) return "border-emerald-300 bg-emerald-50 text-emerald-900";
-  if (value >= 2.4) return "border-lime-300 bg-lime-50 text-lime-900";
-  if (value >= 2.1) return "border-amber-300 bg-amber-50 text-amber-900";
-  if (value >= 1.8) return "border-orange-300 bg-orange-50 text-orange-900";
+  if (value >= 3) return "border-emerald-300 bg-emerald-50 text-emerald-900";
+  if (value >= 2.75) return "border-lime-300 bg-lime-50 text-lime-900";
+  if (value >= 2.5) return "border-amber-300 bg-amber-50 text-amber-900";
+  if (value >= 2) return "border-orange-300 bg-orange-50 text-orange-900";
   return "border-rose-300 bg-rose-50 text-rose-900";
 }
 
