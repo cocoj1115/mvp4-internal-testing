@@ -114,127 +114,9 @@ function Spinner() {
   );
 }
 
-// ─── Setup: Step 1 — Knowledge Base Upload ────────────────────────────────────
+// ─── Setup: Method Assignment ────────────────────────────────────────────────
 
-function Step1KBUpload({ onSuccess }: { onSuccess: () => void }) {
-  const [files, setFiles] = useState<File[]>([]);
-  const [processing, setProcessing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  function addFiles(incoming: FileList | null) {
-    if (!incoming) return;
-    const pdfs = Array.from(incoming).filter((f) => f.type === "application/pdf");
-    setFiles((prev) => {
-      const combined = [...prev, ...pdfs];
-      // dedupe by name, keep latest, max 2
-      const seen = new Map<string, File>();
-      for (const f of combined) seen.set(f.name, f);
-      return Array.from(seen.values()).slice(0, 2);
-    });
-  }
-
-  async function handleProcess() {
-    if (files.length === 0) { setError("Upload at least one PDF."); return; }
-    setProcessing(true);
-    setError(null);
-    try {
-      const fd = new FormData();
-      if (files[0]) fd.append("module1", files[0]);
-      if (files[1]) fd.append("module2", files[1]);
-      const res = await fetch("/api/parse", { method: "POST", body: fd });
-      const ct = res.headers.get("content-type") ?? "";
-      if (!ct.includes("application/json")) {
-        const text = await res.text();
-        throw new Error(`Server error (${res.status}): ${text.slice(0, 200)}`);
-      }
-      const data = await res.json() as { success?: boolean; chunkCount?: number; error?: string };
-      if (!res.ok || !data.success) throw new Error(data.error ?? "Processing failed.");
-      onSuccess();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "An error occurred.");
-    } finally {
-      setProcessing(false);
-    }
-  }
-
-  const hasFiles = files.length > 0;
-
-  return (
-    <div className="space-y-4">
-      {/* Single dropzone */}
-      <div
-        onClick={() => !processing && inputRef.current?.click()}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => { e.preventDefault(); addFiles(e.dataTransfer.files); }}
-        className={`flex flex-col items-center gap-3 rounded-lg border-2 border-dashed px-6 py-8 cursor-pointer transition ${
-          processing ? "opacity-60 pointer-events-none border-gray-200 bg-gray-50"
-          : hasFiles ? "border-indigo-400 bg-indigo-50/20"
-          : "border-gray-300 bg-gray-50 hover:border-indigo-400 hover:bg-indigo-50/20"
-        }`}
-      >
-        <svg className={`w-8 h-8 shrink-0 ${hasFiles ? "text-indigo-400" : "text-gray-300"}`} fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-        </svg>
-        {hasFiles ? (
-          <div className="space-y-1 text-center">
-            {files.map((f) => (
-              <p key={f.name} className="text-sm font-medium text-indigo-700">{f.name}</p>
-            ))}
-            {files.length < 2 && (
-              <p className="text-xs text-gray-400">Click or drop to add a second PDF</p>
-            )}
-          </div>
-        ) : (
-          <div className="text-center">
-            <p className="text-sm text-gray-600">
-              <span className="text-indigo-600 font-medium">Browse</span> or drop PDF files here
-            </p>
-            <p className="text-xs text-gray-400 mt-1">Up to 2 PDF files</p>
-          </div>
-        )}
-        <input
-          ref={inputRef}
-          type="file"
-          accept=".pdf,application/pdf"
-          multiple
-          className="hidden"
-          onChange={(e) => addFiles(e.target.files)}
-        />
-      </div>
-
-      {/* Clear selection */}
-      {hasFiles && !processing && (
-        <button onClick={() => setFiles([])} className="text-xs text-gray-400 hover:text-gray-600 transition">
-          Clear selection
-        </button>
-      )}
-
-      {error && (
-        <p className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-4 py-3">{error}</p>
-      )}
-
-      <div className="flex justify-end">
-        <button
-          onClick={handleProcess}
-          disabled={processing || files.length === 0}
-          className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
-        >
-          {processing ? <><Spinner />Processing…</> : "Process & Embed"}
-        </button>
-      </div>
-      {processing && (
-        <p className="text-xs text-gray-400 text-center">
-          Parsing PDFs and building vector index — this may take a minute…
-        </p>
-      )}
-    </div>
-  );
-}
-
-// ─── Setup: Step 2 — Method Assignment ───────────────────────────────────────
-
-function Step2MethodAssignment({ onSave }: { onSave: (assignment: Record<string, Method>) => void }) {
+function MethodAssignment({ onSave }: { onSave: (assignment: Record<string, Method>) => void }) {
   const [assignment, setAssignment] = useState<Record<string, Method>>({
     M1Q14: 1, M1Q15: 1, M2Q14: 1, M2Q15: 1,
   });
@@ -284,8 +166,6 @@ function Step2MethodAssignment({ onSave }: { onSave: (assignment: Record<string,
 // ─── Setup mode ───────────────────────────────────────────────────────────────
 
 function SetupMode({ onComplete }: { onComplete: () => void }) {
-  const [step, setStep] = useState<1 | 2>(1);
-
   function handleSave(assignment: Record<string, Method>) {
     localStorage.setItem("biobridge_method_assignment", JSON.stringify(assignment));
     localStorage.setItem("biobridge_setup_complete", "true");
@@ -307,42 +187,11 @@ function SetupMode({ onComplete }: { onComplete: () => void }) {
       <div className="max-w-xl mx-auto space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">BioBridge — Setup</h1>
-          <p className="text-sm text-gray-500 mt-1">Step {step} of 2</p>
-        </div>
-
-        {/* Progress */}
-        <div className="flex items-center gap-3">
-          {[
-            { n: 1, label: "Knowledge Base" },
-            { n: 2, label: "Method Assignment" },
-          ].map((s, idx) => (
-            <div key={s.n} className={`flex items-center ${idx < 1 ? "flex-1" : ""}`}>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold border-2 transition-colors ${
-                  s.n < step ? "border-emerald-500 bg-emerald-500 text-white"
-                  : s.n === step ? "border-indigo-600 bg-indigo-600 text-white"
-                  : "border-gray-300 bg-white text-gray-400"
-                }`}>
-                  {s.n < step ? (
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  ) : s.n}
-                </span>
-                <span className={`text-xs font-medium ${s.n === step ? "text-indigo-700" : s.n < step ? "text-emerald-600" : "text-gray-400"}`}>
-                  {s.label}
-                </span>
-              </div>
-              {idx < 1 && <div className={`flex-1 mx-3 h-px ${s.n < step ? "bg-emerald-400" : "bg-gray-200"}`} />}
-            </div>
-          ))}
+          <p className="text-sm text-gray-500 mt-1">Method Assignment</p>
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          {step === 1
-            ? <Step1KBUpload onSuccess={() => setStep(2)} />
-            : <Step2MethodAssignment onSave={handleSave} />
-          }
+          <MethodAssignment onSave={handleSave} />
         </div>
 
         <div className="text-center">
@@ -379,6 +228,7 @@ function PartPlayer({
   onContinue: () => void;
 }) {
   const [retrying, setRetrying] = useState(false);
+  const [modelAnswerOpen, setModelAnswerOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const { status, attempts = [] } = partState;
@@ -430,6 +280,22 @@ function PartPlayer({
         <p className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg px-3 py-2 line-clamp-2">
           {lastAttempt.response}
         </p>
+        {lastAttempt.feedback && (
+          <p className="mt-2 text-xs text-gray-400 leading-relaxed">{lastAttempt.feedback}</p>
+        )}
+        {attempts.length >= 2 && (
+          <div className="mt-2">
+            <button
+              onClick={() => setModelAnswerOpen((v) => !v)}
+              className="text-xs text-gray-400 hover:text-gray-500 transition"
+            >
+              {modelAnswerOpen ? "Hide model answer" : "See model answer"}
+            </button>
+            {modelAnswerOpen && (
+              <p className="mt-1.5 text-xs text-gray-500 leading-relaxed">{part.modelAnswer}</p>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -475,7 +341,8 @@ function PartPlayer({
         {partHeader}
         <p className="text-xs text-gray-400 italic">{part.prompt}</p>
         <p className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">{attempt1.response}</p>
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 leading-relaxed">
+        <p className="text-xs font-semibold text-gray-700">Score: {attempt1.score} / {part.maxScore}</p>
+        <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 leading-relaxed">
           {attempt1.feedback}
         </div>
         <div className="flex justify-end">
@@ -494,7 +361,8 @@ function PartPlayer({
         {partHeader}
         <p className="text-xs text-gray-400 italic">{part.prompt}</p>
         <p className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">{attempt1.response}</p>
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 leading-relaxed">
+        <p className="text-xs font-semibold text-gray-700">Score: {attempt1.score} / {part.maxScore}</p>
+        <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 leading-relaxed">
           {attempt1.feedback}
         </div>
         <div className="flex justify-end">
@@ -551,12 +419,21 @@ function PartPlayer({
         {partHeader}
         <p className="text-xs text-gray-400 italic">{part.prompt}</p>
         <p className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">{attempt2.response}</p>
-        <div className={`rounded-lg border px-4 py-3 text-sm leading-relaxed ${
-          attempt2Passed
-            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-            : "border-amber-200 bg-amber-50 text-amber-800"
-        }`}>
+        <p className="text-xs font-semibold text-gray-700">Score: {attempt2.score} / {part.maxScore}</p>
+        <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 leading-relaxed">
           {attempt2.feedback}
+        </div>
+
+        <div>
+          <button
+            onClick={() => setModelAnswerOpen((v) => !v)}
+            className="text-xs text-gray-400 hover:text-gray-500 transition"
+          >
+            {modelAnswerOpen ? "Hide model answer" : "See model answer"}
+          </button>
+          {modelAnswerOpen && (
+            <p className="mt-1.5 text-xs text-gray-500 leading-relaxed">{part.modelAnswer}</p>
+          )}
         </div>
 
         {attempt2Passed && (
@@ -641,6 +518,17 @@ function QuestionPlayer({
     setLoading(partLabel);
     try {
       const attempt1 = attempts[0] as AttemptRecord | undefined;
+
+      const priorGaps: Record<string, string> = {};
+      question.parts.forEach((p) => {
+        if (p.label === partLabel) return;
+        const partAttempts = session.parts[p.label]?.attempts ?? [];
+        const lastAttempt = partAttempts.at(-1);
+        if (lastAttempt && lastAttempt.diagnosedGap && lastAttempt.diagnosedGap !== "none") {
+          priorGaps[p.label] = lastAttempt.diagnosedGap;
+        }
+      });
+
       const body: Record<string, unknown> = {
         questionId: question.id,
         partLabel,
@@ -652,6 +540,9 @@ function QuestionPlayer({
         body.attempt1Feedback = attempt1.feedback;
         body.attempt1Gap = attempt1.diagnosedGap;
       }
+      body.priorGaps = Object.keys(priorGaps).length > 0 ? priorGaps : undefined;
+      const currentPart = question.parts.find((p) => p.label === partLabel);
+      body.taskType = currentPart?.taskType;
 
       const res = await fetch("/api/grade", {
         method: "POST",

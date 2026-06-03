@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { QUESTION_MAP } from "@/app/lib/questions";
 import { getAdaptationRules } from "@/lib/gstar";
-import { retrieveContext } from "@/lib/retrieval";
+import { retrieveFromKB } from "@/lib/retrieval";
 import { gradeWithMethod2 } from "@/lib/methods/method2";
 import { gradeWithMethod3 } from "@/lib/methods/method3";
 import {
@@ -22,6 +22,8 @@ export interface GradeRequest {
   attemptNumber?: 1 | 2;
   attempt1Feedback?: string;
   attempt1Gap?: string;
+  priorGaps?: Record<string, string>;
+  taskType?: string;
 }
 
 export interface GradeResponse {
@@ -151,6 +153,8 @@ export async function POST(req: NextRequest) {
       attemptNumber = 1,
       attempt1Feedback,
       attempt1Gap,
+      priorGaps,
+      taskType,
     } = body;
 
     const gradingModel = model ?? DEFAULT_GRADING_MODEL;
@@ -224,17 +228,12 @@ export async function POST(req: NextRequest) {
       : null;
     const useGradeOpt = !!adaptationRules;
 
-    const ragContext = await retrieveContext(`${part.prompt}\n${studentResponse}`, 3);
+    const kbContext = await retrieveFromKB(part.prompt, studentResponse, 2);
+    const useKB = kbContext !== null;
 
     const isMultiPoint = part.maxScore > 1;
 
-    // ── Gap resolution check for attempt 2 ──────────────────────────────
-    let resolution: "fully" | "partially" | "not_at_all" | undefined;
-    if (attemptNumber === 2 && attempt1Gap) {
-      resolution = await classifyResolution(attempt1Gap, studentResponse, gradingModel);
-    }
-
-    // ── System prompt ────────────────────────────────────────────────────
+    // ── Scoring system prompt (attempt-1 style — used for both attempts) ──
     const receiveItems: string[] = [
       "1. The question stem",
       "2. The sub-part prompt",
@@ -242,94 +241,240 @@ export async function POST(req: NextRequest) {
     let itemNum = 2;
     if (!useGradeOpt) receiveItems.push(`${++itemNum}. Official scoring guidance`);
     if (useGradeOpt)  receiveItems.push(`${++itemNum}. GradeOpt Adaptation Rules`);
-    if (ragContext)   receiveItems.push(`${++itemNum}. Knowledge base context`);
-    if (attemptNumber === 2) receiveItems.push(`${++itemNum}. Attempt 1 feedback (do not reuse)`);
+    if (useKB) {
+      receiveItems.push(`${++itemNum}. STEELS standard context (KD1)`);
+      receiveItems.push(`${++itemNum}. Scoring rubric context (KD2)`);
+      receiveItems.push(`${++itemNum}. Similar scored examples (KE)`);
+    }
     receiveItems.push(`${++itemNum}. Student response`);
 
-    const attempt2FeedbackInstruction = resolution
-      ? [
-          "",
-          "ATTEMPT 2 — FEEDBACK ROUTING:",
-          `Gap resolution: ${resolution}`,
-          resolution === "fully"
-            ? "Acknowledge specifically what the student improved. 1–2 sentences."
-            : resolution === "partially"
-            ? "Acknowledge progress, then note what is still missing. 2 sentences."
-            : "Reframe from a completely different angle. 2 sentences max.",
-          attempt1Feedback
-            ? `HARD CONSTRAINT: Do not reuse any phrases, sentence structures, or vocabulary from this previous feedback: "${attempt1Feedback}"`
-            : "",
-        ].filter(Boolean).join("\n")
-      : null;
-
-    const systemPrompt = [
+    const scoringSystemPrompt = [
       "You are an expert biology teacher grading a Pennsylvania Keystone Biology Constructed Response (CR) item.",
       "",
       "You will receive:",
       ...receiveItems,
       "",
       "Scoring rules:",
+      "• CRITICAL: A response phrased as a question (e.g. 'DNA?', 'the ribosome?') scores 0 regardless of content — uncertainty is not understanding. A response must be a complete declarative sentence to earn any credit.",
       isMultiPoint
         ? `• This part is worth ${part.maxScore} points. Award 0, 1, or ${part.maxScore} based on distinct scorable elements.`
         : "• This part is worth 1 point. Award 0 or 1.",
       !useGradeOpt ? "• Base your score on the scoring guidance." : null,
       useGradeOpt ? "• Adaptation Rules take precedence where they conflict with base guidance." : null,
-      ragContext ? "• Use knowledge base context to inform judgment; do not quote it directly." : null,
-      attempt2FeedbackInstruction,
+      useKB ? "• Use the STEELS standard context ONLY to understand the biological domain — do NOT use it to expand the scoring criteria beyond what the sub-part prompt explicitly asks. Each part is scored independently." : null,
+      useKB ? "• Use the scoring rubric context to apply the correct criteria." : null,
+      useKB ? "• Use the scored examples as reference — find the closest match to the student's response." : null,
+      priorGaps && Object.keys(priorGaps).length > 0
+        ? "• Prior part gaps are provided for context only. Use them to make feedback more coherent across parts, but do not change the score based on prior gaps. Score only what this sub-part asks."
+        : null,
       "",
-      "Feedback rules (when not overridden by attempt 2 routing above):",
-      "• 1–3 sentences. Acknowledge what was correct, identify what is missing.",
-      "• Be encouraging but precise. Never mention internal scoring criteria.",
+      "FEEDBACK STYLE (apply to every feedback response):",
+      "- Write like a warm, encouraging biology teacher talking directly to a student.",
+      "- Maximum 35 words total.",
+      "- Short sentences. Plain words.",
+      "- For score=0: start by acknowledging what the student got partially right before redirecting. Use 'but' to pivot, not 'The missing step is'. Example tone: 'Ribosomes do help build proteins, but they follow instructions — what molecule actually carries those instructions?'",
+      "- For score=1: be specific and genuinely affirming. Example tone: 'Correct — DNA carries the genetic code that tells the cell which amino acids to use.'",
+      "- Never start with 'I', 'The missing step', 'Your response', or 'This response'.",
+      "- No academic jargon. No textbook phrasing.",
       "",
-      "diagnosedGap: one specific sentence identifying the exact reasoning step or concept missing.",
-      "Write 'none' if score equals maximum.",
+      "STUDENT STATE CLASSIFICATION (classify before writing feedback):",
+      "- blank: response is empty, 'I don't know', a single uncontextualized word, or shows no biological reasoning",
+      "- wrong_concept: response names a specific wrong substance, process, or organism (e.g. ribosome instead of DNA)",
+      "- missing_mechanism: correct concept identified but no causal chain or process explained",
+      "- missing_specificity: correct direction but too vague to earn credit (e.g. 'proteins do different things')",
+      "- partial_credit: multi-point part where student addressed only some of the required elements",
+      "- correct: response earns full credit for this part",
       "",
-      "Respond with ONLY valid JSON — no markdown, no extra keys:",
-      '{"score": <integer>, "feedback": "<string>", "diagnosedGap": "<string>"}',
+      "SCAFFOLDING FEEDBACK RULES by taskType and studentState:",
+      "",
+      `The taskType for this part is: ${taskType ?? "recall_identify"}`,
+      "",
+      "IF studentState = correct:",
+      "  Write exactly 1 declarative sentence.",
+      "  Start with 'Correct —' or 'That's right —'.",
+      "  Name the specific concept correctly identified.",
+      "  No questions, no 'but', no 'however', no critique.",
+      "",
+      "IF studentState = blank:",
+      "  Anchor to prior knowledge regardless of taskType.",
+      "  Do not ask about the gap directly.",
+      "  Template: 'Think about what you know about [biological domain relevant to this part]. [One orienting question that connects prior knowledge to this task].'",
+      "  1-2 sentences max.",
+      "",
+      "IF studentState = wrong_concept:",
+      "  [recall_identify]: 'That [student's answer] has a different role in the cell. What molecule in [relevant location] actually carries [function being asked about]?'",
+      "  [explain_mechanism]: 'You have part of the picture — [student's answer] is involved, but what is the step that directly causes [the outcome asked about]?'",
+      "  [apply_concept / synthesis_design]: 'That approach works in a different context. Here, think about [specific biological principle at play]. How does that principle apply to [scenario]?'",
+      "",
+      "IF studentState = missing_mechanism:",
+      "  [explain_mechanism]: 'You have identified [correct concept they mentioned]. Now trace one more step — what does [X] physically or chemically do to produce [the outcome]?'",
+      "  [experimental_design]: 'You have the right variable in mind. How would a researcher actually measure or observe whether [X] changed?'",
+      "  [synthesis_design]: 'Good starting point. What is the next step in the sequence that makes this work [biologically / genetically]?'",
+      "  [evaluation_justification]: 'You have made a claim. What specific biological consequence or function supports that claim?'",
+      "",
+      "IF studentState = missing_specificity:",
+      "  [recall_identify]: Do NOT ask for an example. 'Can you name the specific [molecule / structure / process] rather than describing its general role?'",
+      "  [explain_mechanism]: 'You have described the outcome. What is the specific [physical / chemical] interaction that produces it?'",
+      "  [evaluation_justification]: 'You have the right idea. What specific function would be lost or impossible without [the thing they mentioned]?'",
+      "  [synthesis_design]: 'You have the goal. What specific [cross / action / step] achieves it, and why does that work [genetically / ecologically]?'",
+      "",
+      "IF studentState = partial_credit:",
+      "  Only applies to multi-point parts (maxScore > 1).",
+      "  Acknowledge what was correct explicitly.",
+      "  Then: 'For the second part, think about a completely different [dimension / type of evidence / aspect of the system] — not [what they already described], but something that measures [a different outcome].'",
+      "  Do not repeat the same category of answer.",
+      "",
+      "ABSOLUTE CONSTRAINTS for all states except correct:",
+      "- Your entire feedback response must contain exactly ONE question mark total. Count before you finish. If you have written two questions, combine them into one or delete the second.",
+      "- Do not reveal the answer",
+      "- Do not say 'incorrect', 'wrong', 'you need to'",
+      "- Do not mention rubrics, scoring criteria, or other parts of the question",
+      "- Do not ask more than one question per feedback",
+      "- Maximum 2 sentences",
+      "",
+      "diagnosedGap: Identify the single most important reasoning step or concept the student failed to demonstrate.",
+      "Be specific to biology content — name the molecule, process, or mechanism that is missing or wrong.",
+      "Format: '[Student believed/wrote X] but [correct concept] is required because [one-line biological reason].'",
+      "Write 'none' if score equals maximum points.",
+      "",
+      'Respond with ONLY valid JSON in this exact format:',
+      '{',
+      '  "reasoning": "<2-4 sentences: what did the student write, what does the rubric require, where does the response succeed or fall short>",',
+      '  "score": <integer>,',
+      '  "studentState": "<one of: blank | wrong_concept | missing_mechanism | missing_specificity | partial_credit | correct>",',
+      '  "feedback": "<string — see scaffolding rules below>",',
+      '  "diagnosedGap": "<string>"',
+      '}',
+      'Write "reasoning" FIRST before deciding score.',
+      'The reasoning field must be 2-4 sentences of explicit biological analysis before you commit to a score.',
+      'reasoning and studentState are internal only — never shown to the student.',
     ].filter((l) => l !== null).join("\n");
 
-    // ── User prompt ──────────────────────────────────────────────────────
-    const userParts = [
+    // ── Scoring user prompt (attempt-1 style — no attempt-2 context) ──────
+    const scoringUserParts = [
       `QUESTION STEM:\n${question.stem}`,
       `SUB-PART ${partLabel} (worth ${part.maxScore} pt${part.maxScore > 1 ? "s" : ""}):\n${part.prompt}`,
       !useGradeOpt ? `SCORING GUIDANCE:\n${part.scoringGuidance}` : null,
       useGradeOpt ? `GRADEOPT ADAPTATION RULES:\n${adaptationRules}` : null,
-      ragContext ? `KNOWLEDGE BASE CONTEXT:\n${ragContext}` : null,
-      attemptNumber === 2 && attempt1Feedback
-        ? `ATTEMPT 1 FEEDBACK (do not reuse):\n${attempt1Feedback}`
+      Object.keys(priorGaps ?? {}).length > 0
+        ? `PRIOR PART GAPS (context only — do not re-grade, do not penalize, use only to inform feedback tone):\n${Object.entries(priorGaps ?? {}).map(([label, gap]) => `Part ${label}: ${gap}`).join("\n")}`
         : null,
+      kbContext ? `STEELS STANDARD CONTEXT (what this question assesses):\n${kbContext.kd1}` : null,
+      kbContext ? `SCORING RUBRIC CONTEXT (official criteria for this part):\n${kbContext.kd2}` : null,
+      kbContext ? `SIMILAR SCORED EXAMPLES (use as reference for scoring):\n${kbContext.ke}` : null,
       `STUDENT RESPONSE:\n${studentResponse.trim()}`,
     ].filter(Boolean);
 
-    const completion = await client.chat.completions.create({
+    // ── Call 1: Score (+ diagnosedGap) ───────────────────────────────────
+    const scoreCompletion = await client.chat.completions.create({
       model: gradingModel,
       temperature: 0,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userParts.join("\n\n") },
+        { role: "system", content: scoringSystemPrompt },
+        { role: "user", content: scoringUserParts.join("\n\n") },
       ],
     });
 
-    const raw = completion.choices[0].message.content ?? "{}";
-    const parsed = JSON.parse(raw) as { score?: unknown; feedback?: string; diagnosedGap?: string };
+    const scoreRaw = scoreCompletion.choices[0].message.content ?? "{}";
+    const scoreParsed = JSON.parse(scoreRaw) as { reasoning?: string; score?: unknown; studentState?: string; feedback?: string; diagnosedGap?: string };
 
-    const rawScore = typeof parsed.score === "number" ? parsed.score : 0;
+    const reasoning = typeof scoreParsed.reasoning === "string" ? scoreParsed.reasoning : "";
+    console.log(`[grade] CoT reasoning: ${reasoning}`);
+
+    const studentState = typeof scoreParsed.studentState === "string" ? scoreParsed.studentState : "unknown";
+    console.log(`[grade] studentState: ${studentState}`);
+
+    const rawScore = typeof scoreParsed.score === "number" ? scoreParsed.score : 0;
     const score = Math.max(0, Math.min(part.maxScore, Math.round(rawScore)));
-    const feedback =
-      typeof parsed.feedback === "string" && parsed.feedback.length > 0
-        ? parsed.feedback
-        : "No feedback returned.";
     const diagnosedGap =
-      typeof parsed.diagnosedGap === "string" && parsed.diagnosedGap.trim()
-        ? parsed.diagnosedGap.trim()
+      typeof scoreParsed.diagnosedGap === "string" && scoreParsed.diagnosedGap.trim()
+        ? scoreParsed.diagnosedGap.trim()
         : "none";
+
+    // ── Attempt 1: feedback comes from the scoring call ───────────────────
+    if (attemptNumber === 1) {
+      const feedback =
+        typeof scoreParsed.feedback === "string" && scoreParsed.feedback.length > 0
+          ? scoreParsed.feedback
+          : "No feedback returned.";
+
+      return NextResponse.json<GradeResponse>({
+        score,
+        feedback,
+        diagnosedGap,
+        tokenCount: scoreCompletion.usage?.total_tokens,
+        model: gradingModel,
+      });
+    }
+
+    // ── Attempt 2: classify resolution, then separate feedback call ───────
+    const resolution = await classifyResolution(
+      attempt1Gap ?? diagnosedGap,
+      studentResponse,
+      gradingModel
+    );
+
+    const feedbackInstruction =
+      resolution === "fully"
+        ? [
+            "IF resolution = fully:",
+            "The student has now correctly answered the question.",
+            "Write 1 sentence acknowledging the specific concept they correctly identified this time. Be warm and specific.",
+          ].join("\n")
+        : resolution === "partially"
+        ? [
+            "IF resolution = partially:",
+            "Do not ask a question.",
+            "Acknowledge what they got right in sentence 1.",
+            "In sentence 2, state the missing piece directly as a fact — do not hint, just complete the reasoning.",
+            "Maximum 2 sentences. No question mark.",
+          ].join("\n")
+        : [
+            "IF resolution = not_at_all:",
+            "Do not ask a question.",
+            "Instead, complete the reasoning for the student.",
+            "Identify the specific step they missed and state it clearly as a declarative sentence.",
+            "Format: '[What they got right, if anything.] [The missing step stated directly.]'",
+            "Maximum 2 sentences. No question mark.",
+          ].join("\n");
+
+    const feedbackSystemPrompt = [
+      "You are giving targeted feedback on a student's second attempt at a Keystone Biology question.",
+      "",
+      `Gap resolution: ${resolution}`,
+      "",
+      feedbackInstruction,
+      "",
+      `HARD CONSTRAINT: Do not reuse any phrases, sentence structures, or vocabulary from this previous feedback: "${attempt1Feedback ?? ""}"`,
+      "",
+      "Return only the feedback text. No JSON, no labels.",
+    ].join("\n");
+
+    const feedbackUserPrompt = [
+      `Question: ${question.stem}`,
+      `Part ${partLabel}: ${part.prompt}`,
+      `What was missing (attempt 1): ${attempt1Gap ?? diagnosedGap}`,
+      `Student attempt 2 response: ${studentResponse}`,
+    ].join("\n");
+
+    // ── Call 2: Feedback only ─────────────────────────────────────────────
+    const feedbackCompletion = await client.chat.completions.create({
+      model: gradingModel,
+      temperature: 0,
+      messages: [
+        { role: "system", content: feedbackSystemPrompt },
+        { role: "user", content: feedbackUserPrompt },
+      ],
+    });
+
+    const feedback = feedbackCompletion.choices[0].message.content?.trim() ?? "No feedback returned.";
 
     return NextResponse.json<GradeResponse>({
       score,
       feedback,
       diagnosedGap,
-      tokenCount: completion.usage?.total_tokens,
+      tokenCount: (scoreCompletion.usage?.total_tokens ?? 0) + (feedbackCompletion.usage?.total_tokens ?? 0),
       model: gradingModel,
       resolution,
     });

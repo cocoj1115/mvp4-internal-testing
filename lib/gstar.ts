@@ -1,7 +1,7 @@
-import gstarA from "@/data/G_star_3.1.9-12.A.json";
-import gstarC from "@/data/G_star_3.1.9-12.C.json";
-import gstarP from "@/data/G_star_3.1.9-12.P.json";
-import gstarN from "@/data/G_star_3.1.9-12.N.json";
+import gstarA from "@/data/gstar/G_star_3.1.9-12.A.json";
+import gstarC from "@/data/gstar/G_star_3.1.9-12.C.json";
+import gstarP from "@/data/gstar/G_star_3.1.9-12.P.json";
+import gstarN from "@/data/gstar/G_star_3.1.9-12.N.json";
 
 export interface GStarPart {
   key_concept: string;

@@ -1,10 +1,15 @@
-export const DEFAULT_GRADING_MODEL = "gpt-4.1";
+export const DEFAULT_GRADING_MODEL = "gpt-5.4";
 
 export const GRADING_MODELS = [
   {
+    id: "gpt-5.4",
+    label: "GPT-5.4",
+    note: "Default",
+  },
+  {
     id: "gpt-4.1",
     label: "GPT-4.1",
-    note: "Default",
+    note: "Fallback",
   },
   {
     id: "gpt-4.1-mini",

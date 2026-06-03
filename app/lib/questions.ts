@@ -1,8 +1,17 @@
 export type PartLabel = "A" | "B" | "C";
 
+export type TaskType =
+  | "recall_identify"
+  | "explain_mechanism"
+  | "evaluation_justification"
+  | "experimental_design"
+  | "apply_concept"
+  | "synthesis_design";
+
 export interface QuestionPart {
   label: PartLabel;
   prompt: string;
+  taskType: TaskType;
   /** Maximum points this part is worth (1 or 2). */
   maxScore: number;
   /** Internal rubric for the grading API — never exposed in the UI. */
@@ -51,6 +60,7 @@ export const QUESTIONS: Question[] = [
       {
         label: "A",
         prompt: "Describe the substance in the cell that determines the order of amino acids in a protein.",
+        taskType: "recall_identify",
         maxScore: 1,
         scoringGuidance:
           "Award 1 point if the response identifies DNA (or a gene / DNA sequence / mRNA derived from DNA) as the substance that determines the order of amino acids. Accept 'genes' or 'the genetic code' if the meaning is clear.",
@@ -60,6 +70,7 @@ export const QUESTIONS: Question[] = [
       {
         label: "B",
         prompt: "Explain how the order of amino acids affects the structure of a protein.",
+        taskType: "explain_mechanism",
         maxScore: 1,
         scoringGuidance:
           "Award 1 point if the response explains that the specific sequence (order) of amino acids determines how the protein folds into its three-dimensional shape/structure. Accept references to interactions between R side chains (hydrogen bonds, ionic bonds, hydrophobic interactions) that drive folding and determine final shape.",
@@ -69,9 +80,10 @@ export const QUESTIONS: Question[] = [
       {
         label: "C",
         prompt: "Explain why having many types of proteins is important for a cell.",
+        taskType: "evaluation_justification",
         maxScore: 1,
         scoringGuidance:
-          "Award 1 point if the response explains that different proteins perform different functions (e.g., enzymes catalyze reactions, structural proteins provide support, transport proteins move substances, receptor proteins receive signals), so having many types allows the cell to carry out many essential and diverse processes.",
+          "Award 1 point if the response explains that different proteins perform different functions, so cells need many types to carry out diverse processes. Accept any of: (1) An explicit justification: each protein has a specific structure that determines its specific function, so different functions require different proteins. (2) A list of specific protein types with their functions (e.g. enzymes catalyze reactions, transport proteins move substances, structural proteins provide support) — listing concrete examples that demonstrate functional diversity earns credit even without a formal justification sentence. Do not award credit for: vague responses that only say proteins are important or do different things without naming any specific function or type.",
         modelAnswer:
           "Each protein has a specific structure that determines its specific function. Because different cellular functions require different proteins, cells need many types — for example, enzymes to catalyze reactions, transport proteins to move substances, and structural proteins to provide support.",
       },
@@ -90,6 +102,7 @@ export const QUESTIONS: Question[] = [
       {
         label: "A",
         prompt: "Briefly describe why the student's eyes changed.",
+        taskType: "recall_identify",
         maxScore: 1,
         scoringGuidance:
           "Award 1 point if the response describes that the pupils constricted/became smaller in response to bright light to reduce the amount of light entering the eye (to protect the retina or to prevent too much light). Accept responses mentioning the iris muscles contracting to constrict the pupil.",
@@ -99,6 +112,7 @@ export const QUESTIONS: Question[] = [
       {
         label: "B",
         prompt: "Explain why the teacher had the classroom dimly lit for a few minutes before starting the investigation.",
+        taskType: "experimental_design",
         maxScore: 1,
         scoringGuidance:
           "Award 1 point if the response explains that dim light allowed the students' pupils to dilate so that all students would have a consistent/standardized starting condition (pupils at maximum or near-maximum dilation) before the investigation began, allowing for a fair/controlled comparison.",
@@ -108,6 +122,7 @@ export const QUESTIONS: Question[] = [
       {
         label: "C",
         prompt: "Describe a feedback mechanism for the pupil of a person's eye if the person were to move from an area with bright light to an area with dim light.",
+        taskType: "explain_mechanism",
         maxScore: 1,
         scoringGuidance:
           "Award 1 point if the response correctly describes a negative feedback sequence: moving to dim light is detected → the iris muscles relax → the pupil dilates (gets larger) to allow more light in → this counteracts the decrease in light, helping restore adequate vision. The response must include both the stimulus (dim light) and the compensatory response (pupil dilation).",
@@ -128,6 +143,7 @@ export const QUESTIONS: Question[] = [
       {
         label: "A",
         prompt: "Describe how breeders can develop different-colored bearded dragons.",
+        taskType: "apply_concept",
         maxScore: 1,
         scoringGuidance:
           "Award 1 point if the response describes that breeders select individuals with desired color traits and mate (cross/breed) them together over multiple generations (selective breeding / artificial selection) to increase the frequency of the desired color trait.",
@@ -137,6 +153,7 @@ export const QUESTIONS: Question[] = [
       {
         label: "B",
         prompt: "Describe the role of parental DNA in affecting the colors produced in the offspring.",
+        taskType: "explain_mechanism",
         maxScore: 1,
         scoringGuidance:
           "Award 1 point if the response explains that DNA (genes/alleles) from each parent is passed to the offspring, and the combination of alleles inherited from both parents determines the offspring's coloration. Accept responses that mention dominant/recessive alleles, genes for color/melanin production, or that each parent contributes one allele per gene.",
@@ -146,6 +163,7 @@ export const QUESTIONS: Question[] = [
       {
         label: "C",
         prompt: "A particular desired color is a recessive trait. Describe the process a breeder should use to develop the recessive trait in bearded dragons.",
+        taskType: "synthesis_design",
         maxScore: 1,
         scoringGuidance:
           "Award 1 point if the response describes that the breeder must mate two individuals that both carry the recessive allele — either two carriers (heterozygous) or two individuals that already express the recessive trait (homozygous recessive) — to reliably produce offspring showing the recessive color. Accept any response that conveys both parents must contribute the recessive allele.",
@@ -188,6 +206,7 @@ export const QUESTIONS: Question[] = [
       {
         label: "A",
         prompt: "Describe a likely way that adding green stormwater infrastructure to a community would benefit the local ecosystem.",
+        taskType: "evaluation_justification",
         maxScore: 1,
         scoringGuidance:
           "Award 1 point if the response describes a clear ecosystem benefit connected to GSI, such as: reduced water pollution/improved water quality in local streams or groundwater; reduced erosion and sediment runoff; reduced flooding that could harm habitats; increased biodiversity by providing habitat; or groundwater recharge that supports wetlands or riparian ecosystems.",
@@ -197,6 +216,7 @@ export const QUESTIONS: Question[] = [
       {
         label: "B",
         prompt: "Describe two ways that researchers could measure the effectiveness of green stormwater infrastructure.",
+        taskType: "synthesis_design",
         maxScore: 2,
         scoringGuidance:
           "Award 1 point per valid measurement method described, up to 2 points maximum. Accept any two of: (1) measuring pollutant or nutrient concentrations (e.g., nitrogen, phosphorus, heavy metals) in runoff before and after GSI installation; (2) measuring total stormwater volume or flow rate; (3) comparing frequency or severity of local flooding events; (4) measuring turbidity or sediment levels in nearby waterways; (5) surveying local species biodiversity before and after installation; (6) monitoring groundwater levels; (7) measuring soil infiltration/absorption rates. Each method must be described clearly enough to be scientifically meaningful.",
