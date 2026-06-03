@@ -1,5 +1,5 @@
 ## What this skill is for
-Use this skill whenever writing any code that calls an LLM
+Use this whenever writing any code that calls an LLM
 to evaluate AI-generated feedback quality
 This includes: eval-judge/route.ts, any judge helper functions,
 and any prompt construction related to feedback evaluation.
