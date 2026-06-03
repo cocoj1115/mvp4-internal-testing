@@ -58,24 +58,22 @@ export async function handleAttempt2(
     resolution === "fully"
       ? [
           "IF resolution = fully:",
-          "The student has now correctly answered the question.",
-          "Write 1 sentence acknowledging the specific concept they correctly identified this time. Be warm and specific.",
+          "The student has now correctly answered the question and made clear progress from attempt 1.",
+          "First, briefly recognize the effort or improvement (e.g. 'You revised this well.' or 'Nice improvement.'). Then name the specific concept they correctly identified. 1-2 sentences.",
         ].join("\n")
       : resolution === "partially"
       ? [
           "IF resolution = partially:",
-          "Do not ask a question.",
-          "Acknowledge what they got right in sentence 1.",
-          "In sentence 2, state the missing piece directly as a fact — do not hint, just complete the reasoning.",
-          "Maximum 2 sentences. No question mark.",
+          "The student made some progress but did not fully close the gap.",
+          "First, recognize what changed or improved from attempt 1 (be specific, not generic). Then in the next sentence, state the remaining missing piece directly as a fact — do not hint, just complete the reasoning.",
+          "Do not ask a question. Maximum 2 sentences. No question mark.",
         ].join("\n")
       : [
           "IF resolution = not_at_all:",
-          "Do not ask a question.",
-          "Instead, complete the reasoning for the student.",
-          "Identify the specific step they missed and state it clearly as a declarative sentence.",
-          "Format: '[What they got right, if anything.] [The missing step stated directly.]'",
-          "Maximum 2 sentences. No question mark.",
+          "The student did not address the gap, but still made an attempt — acknowledge that briefly.",
+          "Then complete the reasoning for the student: identify the specific step they missed and state it clearly as a declarative sentence.",
+          "Format: '[One word of acknowledgment for the effort.] [The missing step stated directly.]'",
+          "Do not ask a question. Maximum 2 sentences. No question mark.",
         ].join("\n");
 
   const feedbackSystemPrompt = [
