@@ -1,6 +1,8 @@
+# Ref1-FeedbackRubric
+
 ## What this skill is for
 Use this whenever writing any code that calls an LLM
-to evaluate AI-generated feedback quality
+to evaluate AI-generated feedback quality in BioBridge.
 This includes: eval-judge/route.ts, any judge helper functions,
 and any prompt construction related to feedback evaluation.
 
@@ -14,30 +16,55 @@ Read this file completely before writing any judge-related code.
 - Temperature: 0 (always — never changes with test config)
 - Response format: json_object
 - Called once per feedback string, after grading completes
+- The request body includes `score` (0 or 1) and `taskType`
+  The judge must apply the correct rubric based on these fields
 
 ---
 
-## System Prompt
+## Two Rubric Tracks
 
-Use this exact system prompt for the judge call:
+### Track A — Score = 1 (Correct Response)
+Feedback after a correct response should be brief and confirmatory.
+Only two dimensions matter:
 
-```
-You are an expert evaluator of formative feedback in science 
-education. You will receive a student response to a biology 
-question and the AI-generated feedback that followed.
+**A1. confirmation_clarity**
+Does the feedback clearly confirm what the student got right?
 
-Score the feedback on five dimensions using the rubrics below.
-Be strict — a score of 4 should be rare and genuinely excellent.
+| Score | Description |
+|---|---|
+| 1 | Vague or generic ("good job", "correct") — does not name what was right |
+| 2 | Names the general topic but not the specific concept |
+| 3 | Names the specific concept the student correctly identified |
+| 4 | Names the specific concept AND connects it precisely to the student's wording |
 
-Return ONLY valid JSON. No markdown. No explanation outside 
-the rationale field.
+**A2. scope_control**
+Does the feedback stay focused on confirming this part only?
+
+| Score | Description |
+|---|---|
+| 1 | Introduces new information, asks follow-up questions, or hints at next part |
+| 2 | Mostly confirmatory but contains one unnecessary addition |
+| 3 | Stays on this part but slightly longer than needed |
+| 4 | Exactly one confirmatory sentence, nothing extra |
+
+Output format for Track A:
+```json
+{
+  "track": "correct",
+  "confirmation_clarity": <1|2|3|4>,
+  "scope_control": <1|2|3|4>,
+  "overall_quality": <1|2|3|4>,
+  "rationale": "<one sentence on biggest weakness>"
+}
 ```
 
 ---
 
-## Five Evaluation Dimensions
+### Track B — Score = 0 (Incorrect Response)
+Feedback after an incorrect response must guide without revealing.
+Four dimensions, split by task type where relevant:
 
-### 1. task_focus
+**B1. task_focus**
 Does the feedback address the task, not the learner?
 
 | Score | Description |
@@ -47,27 +74,34 @@ Does the feedback address the task, not the learner?
 | 3 | Task-focused throughout, no personal framing |
 | 4 | Addresses specific task features with zero personal language |
 
-### 2. specificity
-Does the feedback name the exact missing reasoning step?
+**B2. specificity**
+Does the feedback clearly connect to the learning goal?
 
-| Score | Description |
-|---|---|
-| 1 | Generic or vague — no missing step named ("try again", "think harder") |
-| 2 | Names a general concept but not the specific gap |
-| 3 | Names the missing step but without clear connection to what the student wrote |
-| 4 | Names the exact missing reasoning step and links it clearly to the student's response |
+| Score | Task Type | Description |
+|---|---|---|
+| 1 | Both | Generic — applies to any question ("try again", "think harder") |
+| 2 | Recall/Identify | References the topic but not the specific concept being asked |
+| 2 | Explain Mechanism | Names a general concept but not the specific gap |
+| 3 | Recall/Identify | Names the specific concept or category the student should identify |
+| 3 | Explain Mechanism | Names the missing step but without clear connection to student's response |
+| 4 | Recall/Identify | Names the specific concept AND links it to the student's misconception |
+| 4 | Explain Mechanism | Names the exact missing causal step, linked clearly to student's response |
 
-### 3. manageability
-Is the feedback focused on one thing?
+**B3. manageability**
+Is the amount of information appropriate?
 
-| Score | Description |
-|---|---|
-| 1 | Addresses multiple gaps or provides a mini-lesson |
-| 2 | Addresses two issues, one is primary |
-| 3 | Focuses on one gap but includes one unnecessary add-on |
-| 4 | One clear focused revision target, nothing extra |
+| Score | Task Type | Description |
+|---|---|---|
+| 1 | Recall/Identify | Explains the entire concept — a mini-lesson when one hint would suffice |
+| 1 | Explain Mechanism | Addresses multiple gaps or provides overwhelming information |
+| 2 | Recall/Identify | Two pieces of information when one would suffice |
+| 2 | Explain Mechanism | Addresses two issues; one is primary |
+| 3 | Recall/Identify | One focused hint, appropriate length |
+| 3 | Explain Mechanism | Focuses on one gap but includes one unnecessary add-on |
+| 4 | Recall/Identify | Minimal and targeted — exactly what is needed, nothing extra |
+| 4 | Explain Mechanism | One clear focused revision target, no extra information |
 
-### 4. answer_leakage
+**B4. answer_leakage**
 Does the feedback preserve productive struggle?
 
 | Score | Description |
@@ -77,15 +111,43 @@ Does the feedback preserve productive struggle?
 | 3 | Guides without revealing — one hint is slightly too direct |
 | 4 | Full productive struggle preserved — student must still reason to the answer |
 
-### 5. overall_quality
-Holistic alignment with formative feedback principles.
+Output format for Track B:
+```json
+{
+  "track": "incorrect",
+  "task_focus": <1|2|3|4>,
+  "specificity": <1|2|3|4>,
+  "manageability": <1|2|3|4>,
+  "answer_leakage": <1|2|3|4>,
+  "overall_quality": <1|2|3|4>,
+  "rationale": "<one sentence on biggest weakness>"
+}
+```
 
-| Score | Description |
-|---|---|
-| 1 | Unhelpful — likely to confuse or discourage |
-| 2 | Partially helpful — student may benefit with effort |
-| 3 | Helpful and likely to support revision |
-| 4 | Highly effective — specific, actionable, task-focused, struggle-preserving |
+---
+
+## System Prompt
+
+Use this exact system prompt for the judge call:
+
+```
+You are an expert evaluator of formative feedback in science education.
+
+You will receive:
+- A biology question part and prompt
+- The student's response
+- The AI score (0 = incorrect, 1 = correct)
+- The task type (recall_identify or explain_mechanism)
+- The AI-generated feedback to evaluate
+
+If score = 1: apply Track A rubric (confirmation_clarity, scope_control).
+If score = 0: apply Track B rubric (task_focus, specificity, 
+  manageability, answer_leakage). For specificity and manageability,
+  apply the row that matches the task type provided.
+
+Be strict — a score of 4 should be rare and genuinely excellent.
+Return ONLY valid JSON matching the track format. No markdown.
+```
 
 ---
 
@@ -93,38 +155,49 @@ Holistic alignment with formative feedback principles.
 
 ```
 QUESTION PART: {partLabel}
+TASK TYPE: {taskType}
 QUESTION PROMPT: {partPrompt}
 STUDENT RESPONSE: {studentResponse}
+AI SCORE: {score}
 AI FEEDBACK TO EVALUATE: {feedback}
 ```
 
 ---
 
-## Output Format
+## Pass Thresholds (for CSV export)
 
-The judge must return exactly this JSON structure:
+Track A:
+- confirmation_clarity ≥ 3
+- scope_control ≥ 3
 
-```json
-{
-  "task_focus": <1|2|3|4>,
-  "specificity": <1|2|3|4>,
-  "manageability": <1|2|3|4>,
-  "answer_leakage": <1|2|3|4>,
-  "overall_quality": <1|2|3|4>,
-  "rationale": "<one sentence identifying the single biggest weakness in this feedback>"
-}
-```
+Track B:
+- task_focus ≥ 3.5
+- specificity ≥ 3.0
+- manageability ≥ 3.0
+- answer_leakage ≥ 3.0
+
+A row passes if ALL dimensions for its track meet the threshold.
 
 ---
 
 ## Implementation Notes for Claude Code
 
-- The judge call is always a separate API call from the grading call
-- Never reuse the grading model or temperature for the judge
-- Parse the JSON response strictly — if any field is missing, 
+- Read `score` and `taskType` from the request body
+- Route to Track A or Track B based on score
+- Pass taskType into the user prompt so GPT applies the correct
+  row of the specificity and manageability rubrics
+- Parse the JSON response strictly — if any field is missing,
   default to 1 (not null)
 - The rationale field is included in the CSV export
-- Judge latency should be measured and stored separately 
+- Judge latency should be measured and stored separately
   from grading latency
-- If the judge call fails, store null for all five scores 
+- If the judge call fails, store null for all dimension scores
   and log the error — do not block CSV export
+- The `track` field in the response should be stored in the
+  results row for filtering in CSV export
+
+## Who maintains this file
+Researcher owns this file.
+To update dimension definitions: edit this file, then ask
+Claude Code to regenerate eval-judge/route.ts from this skill.
+Do not edit route.ts dimension strings directly.
