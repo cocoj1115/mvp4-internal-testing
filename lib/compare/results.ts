@@ -54,7 +54,7 @@ function rate(values: Array<boolean | "" | null>): number | null {
 }
 
 export function passTaskFocus(value: number | ""): boolean | "" {
-  return isNumber(value) ? value >= 3.5 : "";
+  return isNumber(value) ? value >= 3.0 : "";
 }
 
 export function passSpecificity(value: number | ""): boolean | "" {

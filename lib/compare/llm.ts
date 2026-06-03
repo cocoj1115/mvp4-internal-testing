@@ -51,6 +51,15 @@ function nonSystemMessages(messages: CompareChatMessage[]) {
     }));
 }
 
+function shouldOmitAnthropicTemperature(modelId: string): boolean {
+  const model = modelId.toLowerCase();
+  return model.includes("opus-4-8");
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function callOpenAI(request: CompareLlmRequest): Promise<CompareLlmResponse> {
   const completion = await openai.chat.completions.create({
     model: envModelOverride("openai", request.modelId),
@@ -73,48 +82,75 @@ async function callOpenAI(request: CompareLlmRequest): Promise<CompareLlmRespons
 
 async function callAnthropic(request: CompareLlmRequest): Promise<CompareLlmResponse> {
   const apiKey = requireEnv("ANTHROPIC_API_KEY");
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: envModelOverride("anthropic", request.modelId),
-      temperature: request.temperature,
-      max_tokens: 1200,
-      system: systemMessage(request.messages),
-      messages: nonSystemMessages(request.messages),
-    }),
-  });
+  const model = envModelOverride("anthropic", request.modelId);
+  const body: Record<string, unknown> = {
+    model,
+    max_tokens: 1200,
+    system: systemMessage(request.messages),
+    messages: nonSystemMessages(request.messages),
+  };
 
-  const json = (await res.json().catch(() => null)) as
-    | {
-        content?: Array<{ type?: string; text?: string }>;
-        usage?: { input_tokens?: number; output_tokens?: number };
-        error?: { message?: string };
-      }
-    | null;
-
-  if (!res.ok) {
-    throw new Error(json?.error?.message ?? `Anthropic request failed (${res.status}).`);
+  if (!shouldOmitAnthropicTemperature(model)) {
+    body.temperature = request.temperature;
   }
 
-  const text =
-    json?.content
-      ?.map((block) => (block.type === "text" ? block.text ?? "" : ""))
-      .join("")
-      .trim() ?? "";
-  const inputTokens = json?.usage?.input_tokens ?? 0;
-  const outputTokens = json?.usage?.output_tokens ?? 0;
+  let lastError = "";
 
-  return {
-    text,
-    inputTokens,
-    outputTokens,
-    totalTokens: inputTokens + outputTokens,
-  };
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify(body),
+    });
+
+    const json = (await res.json().catch(() => null)) as
+      | {
+          content?: Array<{ type?: string; text?: string }>;
+          usage?: { input_tokens?: number; output_tokens?: number };
+          error?: { message?: string; type?: string };
+        }
+      | null;
+
+    if (!res.ok) {
+      const message = json?.error?.message ?? `Anthropic request failed (${res.status}).`;
+      const transient =
+        res.status === 429 ||
+        res.status === 500 ||
+        res.status === 503 ||
+        res.status === 529 ||
+        /overloaded/i.test(message) ||
+        json?.error?.type === "overloaded_error";
+      lastError = message;
+
+      if (transient && attempt < 4) {
+        await sleep(750 * 2 ** (attempt - 1));
+        continue;
+      }
+
+      throw new Error(message);
+    }
+
+    const text =
+      json?.content
+        ?.map((block) => (block.type === "text" ? block.text ?? "" : ""))
+        .join("")
+        .trim() ?? "";
+    const inputTokens = json?.usage?.input_tokens ?? 0;
+    const outputTokens = json?.usage?.output_tokens ?? 0;
+
+    return {
+      text,
+      inputTokens,
+      outputTokens,
+      totalTokens: inputTokens + outputTokens,
+    };
+  }
+
+  throw new Error(lastError || "Anthropic request failed.");
 }
 
 function googleRole(role: CompareChatMessage["role"]) {

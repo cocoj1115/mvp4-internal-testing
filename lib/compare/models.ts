@@ -10,6 +10,7 @@ const BASE_MODELS: Array<{
   provider: CompareProvider;
   modelId: string;
   label: string;
+  temperatureMode?: "configurable" | "provider-default";
 }> = [
   {
     provider: "anthropic",
@@ -20,6 +21,7 @@ const BASE_MODELS: Array<{
     provider: "anthropic",
     modelId: "claude-opus-4-8",
     label: "Claude Opus 4.8",
+    temperatureMode: "provider-default",
   },
   {
     provider: "openai",
@@ -44,14 +46,27 @@ const BASE_MODELS: Array<{
 ];
 
 export const COMPARE_MODEL_CONFIGS: CompareModelConfig[] = BASE_MODELS.flatMap(
-  (model) =>
-    TEMPERATURES.map((temperature) => ({
+  (model) => {
+    if (model.temperatureMode === "provider-default") {
+      return [
+        {
+          id: `${model.provider}:${model.modelId}:default`,
+          provider: model.provider,
+          modelId: model.modelId,
+          label: `${model.label} · provider default`,
+          temperature: 1,
+        },
+      ];
+    }
+
+    return TEMPERATURES.map((temperature) => ({
       id: `${model.provider}:${model.modelId}:t${temperature}`,
       provider: model.provider,
       modelId: model.modelId,
       label: `${model.label} · temp ${temperature}`,
       temperature,
-    }))
+    }));
+  }
 );
 
 export const COMPARE_JUDGE_MODELS: Array<CompareJudgeConfig & { label: string }> = [

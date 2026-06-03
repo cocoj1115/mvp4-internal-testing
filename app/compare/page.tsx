@@ -33,6 +33,15 @@ const METHODS: Array<{ id: CompareMethod; label: string }> = [
   { id: "2", label: "Method 2 · Two-stage" },
   { id: "3", label: "Method 3 · Feedback-first" },
 ];
+const RESULT_TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "explorer", label: "Feedback Explorer" },
+  { id: "failures", label: "Failures" },
+  { id: "raw", label: "Raw Rows" },
+] as const;
+
+type ResultTab = (typeof RESULT_TABS)[number]["id"];
+type FilterValue = "all" | string;
 
 function QuestionImage({ src }: { src: string }) {
   const [missing, setMissing] = useState(false);
@@ -97,16 +106,6 @@ function buildPresetInputs(testCases: M1Q14TestCase[], selectedIds: Set<string>)
     );
 }
 
-function rowsForSummary(summary: SummaryComparisonRow, rows: RawComparisonRow[]) {
-  return rows.filter(
-    (row) =>
-      row.method === summary.method &&
-      row.provider === summary.provider &&
-      row.model === summary.model &&
-      row.temperature === summary.temperature
-  );
-}
-
 function groupModelConfigs() {
   const groups = new Map<
     string,
@@ -158,6 +157,92 @@ function providerLabel(provider: string) {
   return provider;
 }
 
+function heatColor(value: number | null) {
+  if (value === null) return "border-gray-200 bg-gray-50 text-gray-400";
+  if (value >= 2.75) return "border-emerald-300 bg-emerald-50 text-emerald-900";
+  if (value >= 2.4) return "border-lime-300 bg-lime-50 text-lime-900";
+  if (value >= 2.1) return "border-amber-300 bg-amber-50 text-amber-900";
+  if (value >= 1.8) return "border-orange-300 bg-orange-50 text-orange-900";
+  return "border-rose-300 bg-rose-50 text-rose-900";
+}
+
+function meanJudgeScore(row: SummaryComparisonRow | null) {
+  if (!row) return null;
+  const values = [
+    row.taskFocusMean,
+    row.specificityMean,
+    row.manageabilityMean,
+    row.answerLeakageMean,
+    row.overallQualityMean,
+  ].filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  if (values.length === 0) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function heatmapGroups(summaryRows: SummaryComparisonRow[]) {
+  const groups = new Map<
+    string,
+    {
+      key: string;
+      provider: string;
+      model: string;
+      temperature: number;
+      cells: Partial<Record<CompareMethod, SummaryComparisonRow>>;
+    }
+  >();
+
+  for (const row of summaryRows) {
+    const key = `${row.provider}|${row.model}|${row.temperature}`;
+    const existing =
+      groups.get(key) ??
+      {
+        key,
+        provider: row.provider,
+        model: row.model,
+        temperature: row.temperature,
+        cells: {},
+      };
+    existing.cells[String(row.method) as CompareMethod] = row;
+    groups.set(key, existing);
+  }
+
+  return Array.from(groups.values()).sort((a, b) => {
+    const provider = a.provider.localeCompare(b.provider);
+    if (provider !== 0) return provider;
+    const model = a.model.localeCompare(b.model);
+    if (model !== 0) return model;
+    return a.temperature - b.temperature;
+  });
+}
+
+function bestSummary(
+  rows: SummaryComparisonRow[],
+  picker: (row: SummaryComparisonRow) => number | null,
+  mode: "max" | "min" = "max"
+) {
+  const candidates = rows.filter((row) => picker(row) !== null);
+  if (candidates.length === 0) return null;
+  return candidates.reduce((best, row) => {
+    const bestValue = picker(best) ?? (mode === "max" ? -Infinity : Infinity);
+    const rowValue = picker(row) ?? (mode === "max" ? -Infinity : Infinity);
+    return mode === "max" ? (rowValue > bestValue ? row : best) : rowValue < bestValue ? row : best;
+  });
+}
+
+function configLabel(summary: SummaryComparisonRow | null) {
+  if (!summary) return "—";
+  return `Method ${summary.method} · ${summary.model} · temp ${summary.temperature}`;
+}
+
+function passText(value: boolean | "") {
+  if (value === "") return "—";
+  return value ? "true" : "false";
+}
+
+function uniqueSorted(values: string[]) {
+  return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b));
+}
+
 export default function ComparePage() {
   const [testCases, setTestCases] = useState<M1Q14TestCase[]>([]);
   const [selectedTestCaseIds, setSelectedTestCaseIds] = useState<Set<string>>(new Set());
@@ -186,12 +271,17 @@ export default function ComparePage() {
   });
   const [rows, setRows] = useState<RawComparisonRow[]>([]);
   const [summaryRows, setSummaryRows] = useState<SummaryComparisonRow[]>([]);
-  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
   const [progress, setProgress] = useState<{ completed: number; total: number } | null>(null);
   const [currentStatus, setCurrentStatus] = useState("Idle");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
   const [questionContextOpen, setQuestionContextOpen] = useState(true);
+  const [resultTab, setResultTab] = useState<ResultTab>("overview");
+  const [explorerMethod, setExplorerMethod] = useState<FilterValue>("all");
+  const [explorerModel, setExplorerModel] = useState<FilterValue>("all");
+  const [explorerTemperature, setExplorerTemperature] = useState<FilterValue>("all");
+  const [explorerTestCase, setExplorerTestCase] = useState<FilterValue>("all");
+  const [explorerPart, setExplorerPart] = useState<FilterValue>("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -364,8 +454,51 @@ export default function ComparePage() {
   }
 
   const liveSummary = summaryRows.length > 0 ? summaryRows : aggregateRows(rows);
+  const heatmap = useMemo(() => heatmapGroups(liveSummary), [liveSummary]);
   const modelGroups = useMemo(() => groupModelConfigs(), []);
   const liveRows = rows.slice(-12).reverse();
+  const failureRows = useMemo(
+    () =>
+      rows.filter(
+        (row) =>
+          row.status === "failed" ||
+          Boolean(row.error) ||
+          row.feedback.trim() === "" ||
+          row.feedback === "No feedback returned." ||
+          !row.judge_run
+      ),
+    [rows]
+  );
+  const explorerOptions = useMemo(
+    () => ({
+      models: uniqueSorted(rows.map((row) => row.model)),
+      temperatures: uniqueSorted(rows.map((row) => String(row.temperature))),
+      testCases: uniqueSorted(rows.map((row) => row.test_case_id)),
+      parts: uniqueSorted(rows.map((row) => row.part)),
+    }),
+    [rows]
+  );
+  const explorerRows = useMemo(
+    () =>
+      rows.filter((row) => {
+        if (explorerMethod !== "all" && String(row.method) !== explorerMethod) return false;
+        if (explorerModel !== "all" && row.model !== explorerModel) return false;
+        if (explorerTemperature !== "all" && String(row.temperature) !== explorerTemperature) return false;
+        if (explorerTestCase !== "all" && row.test_case_id !== explorerTestCase) return false;
+        if (explorerPart !== "all" && row.part !== explorerPart) return false;
+        return true;
+      }),
+    [explorerMethod, explorerModel, explorerPart, explorerTemperature, explorerTestCase, rows]
+  );
+  const overviewStats = useMemo(
+    () => ({
+      bestMeanJudgeScore: bestSummary(liveSummary, meanJudgeScore),
+      bestMatch: bestSummary(liveSummary, (row) => row.scoreMatchRate),
+      fastest: bestSummary(liveSummary, (row) => row.averageLatencyMs, "min"),
+      lowestTokens: bestSummary(liveSummary, (row) => row.averageTokens, "min"),
+    }),
+    [liveSummary]
+  );
 
   function toggleTestCaseDetails(id: string) {
     setExpandedTestCaseIds((prev) => {
@@ -647,6 +780,9 @@ export default function ComparePage() {
                 <span className="rounded-full bg-indigo-50 px-3 py-1 font-semibold text-indigo-700">
                   {selectedCandidates.length} / {COMPARE_MODEL_CONFIGS.length} conditions selected
                 </span>
+                <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700">
+                  Claude Opus 4.8 uses Anthropic provider default temperature
+                </span>
               </div>
               <div className="mt-4 overflow-hidden rounded-xl border border-gray-200">
                 <div className="grid grid-cols-[minmax(220px,1fr)_repeat(3,96px)] bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
@@ -834,7 +970,9 @@ export default function ComparePage() {
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <h2 className="text-lg font-semibold">Results</h2>
-              <p className="text-sm text-gray-500">{rows.length} raw rows</p>
+              <p className="text-sm text-gray-500">
+                {rows.length} raw rows · {failureRows.length} issues
+              </p>
             </div>
             <button
               onClick={() => downloadCsv(rows)}
@@ -845,186 +983,376 @@ export default function ComparePage() {
             </button>
           </div>
 
-          <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
-            <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900">Latest Generated Feedback</h3>
-                <p className="text-xs text-gray-500">
-                  Updates as each model/method/repeat finishes. Full detail is also available by expanding summary rows below.
-                </p>
+          <div className="mt-4 flex flex-wrap gap-2 border-b border-gray-200 pb-3">
+            {RESULT_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setResultTab(tab.id)}
+                className={`rounded-lg px-4 py-2 text-sm font-medium ${
+                  resultTab === tab.id
+                    ? "bg-indigo-600 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {resultTab === "overview" && (
+            <div className="mt-4 space-y-4">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Best Mean Judge Score</p>
+                  <p className="mt-2 text-sm font-semibold text-gray-900">{configLabel(overviewStats.bestMeanJudgeScore)}</p>
+                  <p className="mt-1 text-2xl font-bold text-indigo-700">{numeric(meanJudgeScore(overviewStats.bestMeanJudgeScore))}</p>
+                </div>
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Best Score Match</p>
+                  <p className="mt-2 text-sm font-semibold text-gray-900">{configLabel(overviewStats.bestMatch)}</p>
+                  <p className="mt-1 text-2xl font-bold text-indigo-700">{percent(overviewStats.bestMatch?.scoreMatchRate ?? null)}</p>
+                </div>
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Fastest</p>
+                  <p className="mt-2 text-sm font-semibold text-gray-900">{configLabel(overviewStats.fastest)}</p>
+                  <p className="mt-1 text-2xl font-bold text-indigo-700">
+                    {overviewStats.fastest?.averageLatencyMs ? `${Math.round(overviewStats.fastest.averageLatencyMs)}ms` : "—"}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Lowest Token Cost</p>
+                  <p className="mt-2 text-sm font-semibold text-gray-900">{configLabel(overviewStats.lowestTokens)}</p>
+                  <p className="mt-1 text-2xl font-bold text-indigo-700">
+                    {overviewStats.lowestTokens?.averageTokens ? Math.round(overviewStats.lowestTokens.averageTokens) : "—"}
+                  </p>
+                </div>
               </div>
-              <span className="text-xs text-gray-400">
-                Showing latest {Math.min(liveRows.length, 12)} rows
-              </span>
-            </div>
-            {liveRows.length === 0 ? (
-              <p className="mt-4 rounded-lg border border-dashed border-gray-200 bg-white p-4 text-sm text-gray-400">
-                Generated feedback will appear here while the run is in progress.
-              </p>
-            ) : (
-              <div className="mt-4 max-h-[32rem] space-y-3 overflow-y-auto">
-                {liveRows.map((row, index) => (
-                  <div
-                    key={`${row.run_id}-${row.test_case_id}-${row.part}-${row.method}-${row.model}-${row.temperature}-${row.repeat_index}-${index}`}
-                    className="rounded-xl border border-gray-200 bg-white p-4"
-                  >
-                    <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                      <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <span className="rounded bg-indigo-50 px-2 py-1 font-semibold text-indigo-700">
-                          Method {row.method}
-                        </span>
-                        <span className="rounded bg-gray-100 px-2 py-1 text-gray-600">
-                          {providerLabel(row.provider)} · {row.model}
-                        </span>
-                        <span className="rounded bg-gray-100 px-2 py-1 text-gray-600">
-                          temp {row.temperature}
-                        </span>
-                        <span className="rounded bg-gray-100 px-2 py-1 text-gray-600">
-                          repeat {row.repeat_index}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <span className="text-gray-500">
-                          {row.test_case_id} · Part {row.part}
-                        </span>
-                        <span
-                          className={`rounded px-2 py-1 font-semibold ${
-                            row.status === "success"
-                              ? "bg-emerald-50 text-emerald-700"
-                              : "bg-rose-50 text-rose-700"
-                          }`}
-                        >
-                          {row.status}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-                      <div className="rounded-lg bg-gray-50 p-3">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-                          Student Response
-                        </p>
-                        <p className="mt-1 text-sm leading-5 text-gray-600">{row.student_response}</p>
-                        <p className="mt-2 text-xs text-gray-500">
-                          AI score: {row.ai_score === "" ? "—" : row.ai_score} / Official: {row.official_score}
-                        </p>
-                      </div>
-                      <div className="rounded-lg border border-gray-200 bg-white p-3">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-                          Generated Feedback
-                        </p>
-                        {row.feedback ? (
-                          <p className="mt-1 text-sm leading-6 text-gray-700">{row.feedback}</p>
-                        ) : (
-                          <p className="mt-1 text-sm text-gray-400">No feedback generated.</p>
-                        )}
-                        {row.error && <p className="mt-2 text-xs text-rose-600">{row.error}</p>}
-                        {row.judge_rationale && (
-                          <p className="mt-2 text-xs leading-5 text-gray-400">
-                            Judge rationale: {row.judge_rationale}
-                          </p>
-                        )}
+
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900">Comparison Heatmap</h3>
+                    <p className="text-xs text-gray-500">
+                      Rows are model-temperature conditions. Color and main score use the average of all five judge dimensions.
+                    </p>
+                  </div>
+                  <span className="text-xs text-gray-400">Mean Judge Score is scored 1-4</span>
+                </div>
+                {heatmap.length === 0 ? (
+                  <p className="mt-4 rounded-lg border border-dashed border-gray-200 bg-white p-4 text-sm text-gray-400">
+                    Heatmap will appear after at least one result is generated.
+                  </p>
+                ) : (
+                  <div className="mt-4 overflow-x-auto">
+                    <div className="min-w-[860px] overflow-hidden rounded-xl border border-gray-200 bg-white">
+                      <div className="grid grid-cols-[minmax(260px,1.1fr)_repeat(3,minmax(170px,1fr))] bg-white text-sm">
+                        <div className="border-b border-gray-200 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                          Model condition
+                        </div>
+                        {METHODS.map((method) => (
+                          <div
+                            key={method.id}
+                            className="border-b border-l border-gray-200 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500"
+                          >
+                            Method {method.id}
+                          </div>
+                        ))}
+                        {heatmap.map((group) => (
+                          <Fragment key={group.key}>
+                            <div className="border-b border-gray-100 px-4 py-3">
+                              <p className="font-semibold text-gray-800">{group.model}</p>
+                              <p className="mt-1 text-xs text-gray-400">
+                                {providerLabel(group.provider)} · temp {group.temperature}
+                              </p>
+                            </div>
+                            {METHODS.map((method) => {
+                              const cell = group.cells[method.id];
+                              const score = meanJudgeScore(cell ?? null);
+                              return (
+                                <div key={method.id} className="border-b border-l border-gray-100 p-2">
+                                  {cell ? (
+                                    <div className={`rounded-lg border p-3 ${heatColor(score)}`}>
+                                      <div className="flex items-center justify-between gap-3">
+                                        <span className="text-xs font-semibold uppercase tracking-wider">Mean Judge Score</span>
+                                        <span className="text-lg font-bold">{numeric(score)}</span>
+                                      </div>
+                                      <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                                        <span>Overall {numeric(cell.overallQualityMean)}</span>
+                                        <span>Pass {percent(cell.passOverallRate)}</span>
+                                        <span>Match {percent(cell.scoreMatchRate)}</span>
+                                        <span>Rows {cell.successRows}/{cell.totalRows}</span>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-3 text-center text-xs text-gray-400">
+                                      No data
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </Fragment>
+                        ))}
                       </div>
                     </div>
                   </div>
-                ))}
+                )}
               </div>
-            )}
-          </div>
 
-          <div className="mt-6 overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="text-xs uppercase tracking-wider text-gray-500">
-                <tr>
-                  <th className="px-3 py-2">Config</th>
-                  <th className="px-3 py-2">Rows</th>
-                  <th className="px-3 py-2">Score Match</th>
-                  <th className="px-3 py-2">Task</th>
-                  <th className="px-3 py-2">Specificity</th>
-                  <th className="px-3 py-2">Manageability</th>
-                  <th className="px-3 py-2">Leakage</th>
-                  <th className="px-3 py-2">Overall</th>
-                  <th className="px-3 py-2">Pass</th>
-                  <th className="px-3 py-2">Latency</th>
-                  <th className="px-3 py-2">Tokens</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {liveSummary.map((summary) => {
-                  const expanded = expandedKeys.has(summary.key);
-                  const detailRows = rowsForSummary(summary, rows);
-                  return (
-                    <Fragment key={summary.key}>
-                      <tr
-                        key={summary.key}
-                        className="cursor-pointer hover:bg-gray-50/50"
-                        onClick={() =>
-                          setExpandedKeys((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(summary.key)) next.delete(summary.key);
-                            else next.add(summary.key);
-                            return next;
-                          })
-                        }
-                      >
+              <div className="overflow-x-auto rounded-xl border border-gray-200">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="bg-gray-50 text-xs uppercase tracking-wider text-gray-500">
+                    <tr>
+                      <th className="px-3 py-2">Config</th>
+                      <th className="px-3 py-2">Rows</th>
+                      <th className="px-3 py-2">Score Match</th>
+                      <th className="px-3 py-2">Mean Judge Score</th>
+                      <th className="px-3 py-2">Overall</th>
+                      <th className="px-3 py-2">Pass</th>
+                      <th className="px-3 py-2">Latency</th>
+                      <th className="px-3 py-2">Tokens</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 bg-white">
+                    {liveSummary.map((summary) => (
+                      <tr key={summary.key}>
                         <td className="px-3 py-3">
                           <p className="font-medium">Method {summary.method} · {summary.model}</p>
                           <p className="text-xs text-gray-400">{summary.provider} · temp {summary.temperature}</p>
                         </td>
                         <td className="px-3 py-3">{summary.successRows}/{summary.totalRows}</td>
                         <td className="px-3 py-3">{percent(summary.scoreMatchRate)}</td>
-                        <td className="px-3 py-3">{numeric(summary.taskFocusMean)}</td>
-                        <td className="px-3 py-3">{numeric(summary.specificityMean)}</td>
-                        <td className="px-3 py-3">{numeric(summary.manageabilityMean)}</td>
-                        <td className="px-3 py-3">{numeric(summary.answerLeakageMean)}</td>
-                        <td className="px-3 py-3 font-semibold text-indigo-700">{numeric(summary.overallQualityMean)}</td>
+                        <td className="px-3 py-3 font-semibold text-indigo-700">{numeric(meanJudgeScore(summary))}</td>
+                        <td className="px-3 py-3">{numeric(summary.overallQualityMean)}</td>
                         <td className="px-3 py-3">{percent(summary.passOverallRate)}</td>
                         <td className="px-3 py-3">{summary.averageLatencyMs ? Math.round(summary.averageLatencyMs) : "—"} ms</td>
                         <td className="px-3 py-3">{summary.averageTokens ? Math.round(summary.averageTokens) : "—"}</td>
                       </tr>
-                      {expanded && (
-                        <tr>
-                          <td colSpan={11} className="bg-gray-50 px-3 py-3">
-                            <div className="max-h-96 space-y-3 overflow-y-auto">
-                              {detailRows.map((row, index) => (
-                                <div key={`${row.run_id}-${row.test_case_id}-${row.part}-${row.repeat_index}-${index}`} className="rounded-lg border border-gray-200 bg-white p-3">
-                                  <div className="flex flex-wrap gap-2 text-xs text-gray-500">
-                                    <span>{row.test_case_id}</span>
-                                    <span>Part {row.part}</span>
-                                    <span>repeat {row.repeat_index}</span>
-                                    <span>{row.status}</span>
-                                    <span>score {row.ai_score === "" ? "—" : row.ai_score}/{row.official_score}</span>
-                                  </div>
-                                  {row.error && <p className="mt-2 text-xs text-rose-600">{row.error}</p>}
-                                  {row.feedback && <p className="mt-2 text-sm text-gray-700">{row.feedback}</p>}
-                                  {row.judge_rationale && (
-                                    <p className="mt-2 text-xs text-gray-400">Judge: {row.judge_rationale}</p>
-                                  )}
-                                  <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                                    <span>task {row.task_focus || "—"} ({String(passTaskFocus(row.task_focus))})</span>
-                                    <span>specificity {row.specificity || "—"} ({String(passSpecificity(row.specificity))})</span>
-                                    <span>manageability {row.manageability || "—"} ({String(passManageability(row.manageability))})</span>
-                                    <span>leakage {row.answer_leakage || "—"} ({String(passAnswerLeakage(row.answer_leakage))})</span>
-                                    <span>overall pass {String(passOverall(row))}</span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-                {liveSummary.length === 0 && (
-                  <tr>
-                    <td colSpan={11} className="px-3 py-10 text-center text-gray-400">
-                      No results yet.
-                    </td>
-                  </tr>
+                    ))}
+                    {liveSummary.length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="px-3 py-10 text-center text-gray-400">
+                          No results yet.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {resultTab === "explorer" && (
+            <div className="mt-4 space-y-4">
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+                  <label className="text-sm">
+                    <span className="mb-1 block font-medium text-gray-600">Method</span>
+                    <select value={explorerMethod} onChange={(event) => setExplorerMethod(event.target.value)} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2">
+                      <option value="all">All</option>
+                      {METHODS.map((method) => (
+                        <option key={method.id} value={method.id}>Method {method.id}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-sm">
+                    <span className="mb-1 block font-medium text-gray-600">Model</span>
+                    <select value={explorerModel} onChange={(event) => setExplorerModel(event.target.value)} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2">
+                      <option value="all">All</option>
+                      {explorerOptions.models.map((model) => (
+                        <option key={model} value={model}>{model}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-sm">
+                    <span className="mb-1 block font-medium text-gray-600">Temperature</span>
+                    <select value={explorerTemperature} onChange={(event) => setExplorerTemperature(event.target.value)} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2">
+                      <option value="all">All</option>
+                      {explorerOptions.temperatures.map((temperature) => (
+                        <option key={temperature} value={temperature}>temp {temperature}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-sm">
+                    <span className="mb-1 block font-medium text-gray-600">Test Case</span>
+                    <select value={explorerTestCase} onChange={(event) => setExplorerTestCase(event.target.value)} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2">
+                      <option value="all">All</option>
+                      {explorerOptions.testCases.map((testCase) => (
+                        <option key={testCase} value={testCase}>{testCase}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-sm">
+                    <span className="mb-1 block font-medium text-gray-600">Part</span>
+                    <select value={explorerPart} onChange={(event) => setExplorerPart(event.target.value)} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2">
+                      <option value="all">All</option>
+                      {explorerOptions.parts.map((part) => (
+                        <option key={part} value={part}>Part {part}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExplorerMethod("all");
+                        setExplorerModel("all");
+                        setExplorerTemperature("all");
+                        setExplorerTestCase("all");
+                        setExplorerPart("all");
+                      }}
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50"
+                    >
+                      Clear filters
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {running && liveRows.length > 0 && (
+                <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-indigo-500">Live latest</p>
+                  <p className="mt-1 text-sm text-indigo-800">
+                    {liveRows[0].model} · Method {liveRows[0].method} · Part {liveRows[0].part}: {liveRows[0].feedback || "No feedback generated yet."}
+                  </p>
+                </div>
+              )}
+
+              <div className="max-h-[48rem] space-y-3 overflow-y-auto">
+                {explorerRows.map((row, index) => (
+                  <div
+                    key={`${row.run_id}-${row.test_case_id}-${row.part}-${row.method}-${row.model}-${row.temperature}-${row.repeat_index}-${index}`}
+                    className="rounded-xl border border-gray-200 bg-white p-4"
+                  >
+                    <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="rounded bg-indigo-50 px-2 py-1 font-semibold text-indigo-700">Method {row.method}</span>
+                        <span className="rounded bg-gray-100 px-2 py-1 text-gray-600">{providerLabel(row.provider)} · {row.model}</span>
+                        <span className="rounded bg-gray-100 px-2 py-1 text-gray-600">temp {row.temperature}</span>
+                        <span className="rounded bg-gray-100 px-2 py-1 text-gray-600">repeat {row.repeat_index}</span>
+                      </div>
+                      <div className="text-xs text-gray-500">{row.test_case_id} · Part {row.part}</div>
+                    </div>
+                    <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+                      <div className="rounded-lg bg-gray-50 p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Student Response</p>
+                        <p className="mt-1 text-sm leading-5 text-gray-600">{row.student_response}</p>
+                        <p className="mt-2 text-xs text-gray-500">
+                          AI score: {row.ai_score === "" ? "—" : row.ai_score} / Official: {row.official_score} · Match: {row.score_match === "" ? "—" : String(row.score_match)}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-gray-200 bg-white p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Generated Feedback</p>
+                        <p className="mt-1 text-sm leading-6 text-gray-700">{row.feedback || "No feedback generated."}</p>
+                        {row.judge_rationale && (
+                          <p className="mt-2 text-xs leading-5 text-gray-400">Judge rationale: {row.judge_rationale}</p>
+                        )}
+                        {row.error && <p className="mt-2 text-xs text-rose-600">{row.error}</p>}
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500">
+                      <span>task {row.task_focus || "—"} ({String(passTaskFocus(row.task_focus))})</span>
+                      <span>specificity {row.specificity || "—"} ({String(passSpecificity(row.specificity))})</span>
+                      <span>manageability {row.manageability || "—"} ({String(passManageability(row.manageability))})</span>
+                      <span>leakage {row.answer_leakage || "—"} ({String(passAnswerLeakage(row.answer_leakage))})</span>
+                      <span>overall {row.overall_quality || "—"}</span>
+                      <span>pass {String(passOverall(row))}</span>
+                    </div>
+                  </div>
+                ))}
+                {explorerRows.length === 0 && (
+                  <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-400">
+                    No feedback rows match the current filters.
+                  </p>
                 )}
-              </tbody>
-            </table>
-          </div>
+              </div>
+            </div>
+          )}
+
+          {resultTab === "failures" && (
+            <div className="mt-4 space-y-3">
+              {failureRows.map((row, index) => (
+                <div key={`${row.run_id}-${row.test_case_id}-${row.part}-${row.method}-${index}`} className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+                  <div className="flex flex-wrap gap-2 text-xs text-rose-700">
+                    <span>Method {row.method}</span>
+                    <span>{row.model}</span>
+                    <span>temp {row.temperature}</span>
+                    <span>{row.test_case_id}</span>
+                    <span>Part {row.part}</span>
+                    <span>repeat {row.repeat_index}</span>
+                  </div>
+                  <p className="mt-2 text-sm font-semibold text-rose-900">
+                    {row.error || (row.feedback ? "Judge did not complete." : "No feedback returned.")}
+                  </p>
+                  {row.feedback && <p className="mt-2 text-sm text-rose-800">{row.feedback}</p>}
+                </div>
+              ))}
+              {failureRows.length === 0 && (
+                <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-400">
+                  No failures or missing feedback rows.
+                </p>
+              )}
+            </div>
+          )}
+
+          {resultTab === "raw" && (
+            <div className="mt-4 overflow-x-auto rounded-xl border border-gray-200">
+              <table className="min-w-[1400px] text-left text-xs">
+                <thead className="bg-gray-50 uppercase tracking-wider text-gray-500">
+                  <tr>
+                    <th className="px-3 py-2">Method</th>
+                    <th className="px-3 py-2">Provider</th>
+                    <th className="px-3 py-2">Model</th>
+                    <th className="px-3 py-2">Temp</th>
+                    <th className="px-3 py-2">Case</th>
+                    <th className="px-3 py-2">Part</th>
+                      <th className="px-3 py-2">Repeat</th>
+                      <th className="px-3 py-2">AI/Official</th>
+                      <th className="px-3 py-2">Task</th>
+                      <th className="px-3 py-2">Specificity</th>
+                      <th className="px-3 py-2">Manageability</th>
+                      <th className="px-3 py-2">Leakage</th>
+                      <th className="px-3 py-2">Overall</th>
+                      <th className="px-3 py-2">Pass</th>
+                    <th className="px-3 py-2">Latency</th>
+                    <th className="px-3 py-2">Tokens</th>
+                    <th className="px-3 py-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {rows.map((row, index) => (
+                    <tr key={`${row.run_id}-${index}`}>
+                      <td className="px-3 py-2">{row.method}</td>
+                      <td className="px-3 py-2">{row.provider}</td>
+                      <td className="px-3 py-2">{row.model}</td>
+                      <td className="px-3 py-2">{row.temperature}</td>
+                      <td className="px-3 py-2">{row.test_case_id}</td>
+                      <td className="px-3 py-2">{row.part}</td>
+                      <td className="px-3 py-2">{row.repeat_index}</td>
+                      <td className="px-3 py-2">{row.ai_score === "" ? "—" : row.ai_score}/{row.official_score}</td>
+                      <td className="px-3 py-2">{row.task_focus || "—"}</td>
+                      <td className="px-3 py-2">{row.specificity || "—"}</td>
+                      <td className="px-3 py-2">{row.manageability || "—"}</td>
+                      <td className="px-3 py-2">{row.answer_leakage || "—"}</td>
+                      <td className="px-3 py-2">{row.overall_quality || "—"}</td>
+                      <td className="px-3 py-2">{passText(passOverall(row))}</td>
+                      <td className="px-3 py-2">{row.grading_latency_ms || "—"}</td>
+                      <td className="px-3 py-2">{row.grading_token_count || "—"}</td>
+                      <td className="px-3 py-2">{row.status}</td>
+                    </tr>
+                  ))}
+                  {rows.length === 0 && (
+                    <tr>
+                      <td colSpan={17} className="px-3 py-10 text-center text-gray-400">
+                        No raw rows yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
       </div>
     </main>
