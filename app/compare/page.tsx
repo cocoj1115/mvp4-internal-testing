@@ -11,8 +11,10 @@ import {
   buildComparisonCsv,
   comparisonCsvFilename,
   passAnswerLeakage,
+  passConfirmationClarity,
   passManageability,
   passOverall,
+  passScopeControl,
   passSpecificity,
   passTaskFocus,
 } from "@/lib/compare/results";
@@ -169,6 +171,8 @@ function heatColor(value: number | null) {
 function meanJudgeScore(row: SummaryComparisonRow | null) {
   if (!row) return null;
   const values = [
+    row.confirmationClarityMean,
+    row.scopeControlMean,
     row.taskFocusMean,
     row.specificityMean,
     row.manageabilityMean,
@@ -1285,12 +1289,23 @@ export default function ComparePage() {
                       </div>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500">
-                      <span>task {row.task_focus || "—"} ({String(passTaskFocus(row.task_focus))})</span>
-                      <span>specificity {row.specificity || "—"} ({String(passSpecificity(row.specificity))})</span>
-                      <span>manageability {row.manageability || "—"} ({String(passManageability(row.manageability))})</span>
-                      <span>leakage {row.answer_leakage || "—"} ({String(passAnswerLeakage(row.answer_leakage))})</span>
+                      {row.judge_track === "correct" ? (
+                        <>
+                          <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700">Track A</span>
+                          <span>clarity {row.confirmation_clarity || "—"} ({String(passConfirmationClarity(row.confirmation_clarity))})</span>
+                          <span>scope {row.scope_control || "—"} ({String(passScopeControl(row.scope_control))})</span>
+                        </>
+                      ) : row.judge_track === "incorrect" ? (
+                        <>
+                          <span className="rounded bg-rose-50 px-1.5 py-0.5 text-rose-700">Track B</span>
+                          <span>task {row.task_focus || "—"} ({String(passTaskFocus(row.task_focus))})</span>
+                          <span>specificity {row.specificity || "—"} ({String(passSpecificity(row.specificity))})</span>
+                          <span>manageability {row.manageability || "—"} ({String(passManageability(row.manageability))})</span>
+                          <span>leakage {row.answer_leakage || "—"} ({String(passAnswerLeakage(row.answer_leakage))})</span>
+                        </>
+                      ) : null}
                       <span>overall {row.overall_quality || "—"}</span>
-                      <span>pass {String(passOverall(row))}</span>
+                      <span>pass {passText(passOverall(row))}</span>
                     </div>
                   </div>
                 ))}
@@ -1340,14 +1355,17 @@ export default function ComparePage() {
                     <th className="px-3 py-2">Temp</th>
                     <th className="px-3 py-2">Case</th>
                     <th className="px-3 py-2">Part</th>
-                      <th className="px-3 py-2">Repeat</th>
-                      <th className="px-3 py-2">AI/Official</th>
-                      <th className="px-3 py-2">Task</th>
-                      <th className="px-3 py-2">Specificity</th>
-                      <th className="px-3 py-2">Manageability</th>
-                      <th className="px-3 py-2">Leakage</th>
-                      <th className="px-3 py-2">Overall</th>
-                      <th className="px-3 py-2">Pass</th>
+                    <th className="px-3 py-2">Repeat</th>
+                    <th className="px-3 py-2">AI/Official</th>
+                    <th className="px-3 py-2">Track</th>
+                    <th className="px-3 py-2">Clarity</th>
+                    <th className="px-3 py-2">Scope</th>
+                    <th className="px-3 py-2">Task</th>
+                    <th className="px-3 py-2">Specificity</th>
+                    <th className="px-3 py-2">Manage</th>
+                    <th className="px-3 py-2">Leakage</th>
+                    <th className="px-3 py-2">Overall</th>
+                    <th className="px-3 py-2">Pass</th>
                     <th className="px-3 py-2">Latency</th>
                     <th className="px-3 py-2">Tokens</th>
                     <th className="px-3 py-2">Status</th>
@@ -1364,6 +1382,9 @@ export default function ComparePage() {
                       <td className="px-3 py-2">{row.part}</td>
                       <td className="px-3 py-2">{row.repeat_index}</td>
                       <td className="px-3 py-2">{row.ai_score === "" ? "—" : row.ai_score}/{row.official_score}</td>
+                      <td className="px-3 py-2">{row.judge_track || "—"}</td>
+                      <td className="px-3 py-2">{row.confirmation_clarity || "—"}</td>
+                      <td className="px-3 py-2">{row.scope_control || "—"}</td>
                       <td className="px-3 py-2">{row.task_focus || "—"}</td>
                       <td className="px-3 py-2">{row.specificity || "—"}</td>
                       <td className="px-3 py-2">{row.manageability || "—"}</td>
@@ -1377,7 +1398,7 @@ export default function ComparePage() {
                   ))}
                   {rows.length === 0 && (
                     <tr>
-                      <td colSpan={17} className="px-3 py-10 text-center text-gray-400">
+                      <td colSpan={20} className="px-3 py-10 text-center text-gray-400">
                         No raw rows yet.
                       </td>
                     </tr>

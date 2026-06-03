@@ -33,11 +33,19 @@ export interface CompareRequest {
   judge: CompareJudgeConfig;
 }
 
+export type JudgeTrack = "correct" | "incorrect";
+
 export interface JudgeScores {
+  track: JudgeTrack;
+  // Track A (score = 1)
+  confirmation_clarity: number | null;
+  scope_control: number | null;
+  // Track B (score = 0)
   task_focus: number | null;
   specificity: number | null;
   manageability: number | null;
   answer_leakage: number | null;
+  // Both tracks
   overall_quality: number | null;
   rationale: string;
 }
@@ -61,10 +69,16 @@ export interface RawComparisonRow {
   grading_latency_ms: number | "";
   grading_token_count: number | "";
   judge_run: boolean;
+  judge_track: JudgeTrack | "";
+  // Track A (score = 1)
+  confirmation_clarity: number | "";
+  scope_control: number | "";
+  // Track B (score = 0)
   task_focus: number | "";
   specificity: number | "";
   manageability: number | "";
   answer_leakage: number | "";
+  // Both tracks
   overall_quality: number | "";
   judge_rationale: string;
   judge_latency_ms: number | "";
@@ -81,10 +95,15 @@ export interface SummaryComparisonRow {
   totalRows: number;
   successRows: number;
   scoreMatchRate: number | null;
+  // Track A means
+  confirmationClarityMean: number | null;
+  scopeControlMean: number | null;
+  // Track B means
   taskFocusMean: number | null;
   specificityMean: number | null;
   manageabilityMean: number | null;
   answerLeakageMean: number | null;
+  // Both tracks
   overallQualityMean: number | null;
   averageLatencyMs: number | null;
   averageTokens: number | null;

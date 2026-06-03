@@ -100,6 +100,9 @@ function normalizeRequest(body: unknown): CompareRequest {
 function emptyJudgeFields() {
   return {
     judge_run: false,
+    judge_track: "" as const,
+    confirmation_clarity: "" as const,
+    scope_control: "" as const,
     task_focus: "" as const,
     specificity: "" as const,
     manageability: "" as const,
@@ -252,15 +255,19 @@ export async function POST(req: NextRequest) {
                   const judge = await judgeFeedback({
                     questionId: "M1Q14",
                     part: input.part,
+                    taskType: part.taskType,
                     studentResponse: input.studentResponse,
                     feedback: result.feedback,
-                    judge: compareRequest.judge,
-                    officialScore: input.officialScore,
+                    aiScore: result.aiScore,
                     maxScore: part.maxScore,
+                    judge: compareRequest.judge,
                   });
                   row = {
                     ...base,
                     judge_run: true,
+                    judge_track: judge.track,
+                    confirmation_clarity: judge.confirmation_clarity ?? "",
+                    scope_control: judge.scope_control ?? "",
                     task_focus: judge.task_focus ?? "",
                     specificity: judge.specificity ?? "",
                     manageability: judge.manageability ?? "",

@@ -1,67 +1,36 @@
 import { PartLabel, QUESTION_MAP } from "@/app/lib/questions";
 import { callCompareLlm } from "@/lib/compare/llm";
-import { CompareJudgeConfig, JudgeScores } from "@/lib/compare/types";
+import { CompareJudgeConfig, JudgeScores, JudgeTrack } from "@/lib/compare/types";
 
 interface JudgeInput {
   questionId: "M1Q14";
   part: PartLabel;
+  taskType: string;
   studentResponse: string;
   feedback: string;
-  judge: CompareJudgeConfig;
-  officialScore: number;
+  aiScore: number;
   maxScore: number;
+  judge: CompareJudgeConfig;
 }
 
 export interface JudgeResult extends JudgeScores {
   latencyMs: number;
 }
 
-const JUDGE_SYSTEM_PROMPT = `You are an expert evaluator of formative feedback in science 
-education. You will receive a student response to a biology 
-question and the AI-generated feedback that followed.
+const JUDGE_SYSTEM_PROMPT = `You are an expert evaluator of formative feedback in science education.
 
-Score the feedback on five dimensions using the rubrics below.
+You will receive:
+- A biology question part and prompt
+- The student's response
+- The AI score (0 = incorrect, 1 = correct)
+- The task type (recall_identify or explain_mechanism)
+- The AI-generated feedback to evaluate
+
+If score = 1: apply Track A rubric (confirmation_clarity, scope_control).
+If score = 0: apply Track B rubric (task_focus, specificity, manageability, answer_leakage). For specificity and manageability, apply the row that matches the task type provided.
+
 Be strict — a score of 4 should be rare and genuinely excellent.
-
-Return ONLY valid JSON. No markdown. No explanation outside 
-the rationale field.
-
-Five Evaluation Dimensions
-
-1. task_focus
-Does the feedback address the task, not the learner?
-1 = Uses personal or evaluative language ("you don't understand", "you failed to")
-2 = Mostly task-focused but contains one evaluative phrase
-3 = Task-focused throughout, no personal framing
-4 = Addresses specific task features with zero personal language
-
-2. specificity
-Does the feedback name the exact missing reasoning step?
-1 = Generic or vague — no missing step named ("try again", "think harder")
-2 = Names a general concept but not the specific gap
-3 = Names the missing step but without clear connection to what the student wrote
-4 = Names the exact missing reasoning step and links it clearly to the student's response
-
-3. manageability
-Is the feedback focused on one thing?
-1 = Addresses multiple gaps or provides a mini-lesson
-2 = Addresses two issues, one is primary
-3 = Focuses on one gap but includes one unnecessary add-on
-4 = One clear focused revision target, nothing extra
-
-4. answer_leakage
-Does the feedback preserve productive struggle?
-1 = Directly states the correct answer or key term
-2 = Implies the answer strongly through leading questions
-3 = Guides without revealing — one hint is slightly too direct
-4 = Full productive struggle preserved — student must still reason to the answer
-
-5. overall_quality
-Holistic alignment with formative feedback principles.
-1 = Unhelpful — likely to confuse or discourage
-2 = Partially helpful — student may benefit with effort
-3 = Helpful and likely to support revision
-4 = Highly effective — specific, actionable, task-focused, struggle-preserving`;
+Return ONLY valid JSON matching the track format. No markdown.`;
 
 function parseJsonObject(text: string): Record<string, unknown> {
   try {
@@ -87,15 +56,22 @@ export async function judgeFeedback(input: JudgeInput): Promise<JudgeResult> {
   const part = question.parts.find((candidate) => candidate.label === input.part);
   if (!part) throw new Error(`Unknown part: ${input.part}`);
 
+  const track: JudgeTrack = input.aiScore >= input.maxScore ? "correct" : "incorrect";
+
   const t0 = Date.now();
+
+  const trackAFormat = `{"track":"correct","confirmation_clarity":1,"scope_control":1,"overall_quality":1,"rationale":"one sentence on biggest weakness"}`;
+  const trackBFormat = `{"track":"incorrect","task_focus":1,"specificity":1,"manageability":1,"answer_leakage":1,"overall_quality":1,"rationale":"one sentence on biggest weakness"}`;
+
   const userPrompt = [
     `QUESTION PART: ${input.part}`,
+    `TASK TYPE: ${input.taskType}`,
     `QUESTION PROMPT: ${part.prompt}`,
     `STUDENT RESPONSE: ${input.studentResponse}`,
+    `AI SCORE: ${input.aiScore}`,
     `AI FEEDBACK TO EVALUATE: ${input.feedback}`,
     "",
-    "Return exactly this JSON structure:",
-    '{"task_focus":1,"specificity":1,"manageability":1,"answer_leakage":1,"overall_quality":1,"rationale":"one sentence identifying the single biggest weakness in this feedback"}',
+    `Return exactly this JSON structure: ${track === "correct" ? trackAFormat : trackBFormat}`,
   ].join("\n");
 
   const res = await callCompareLlm({
@@ -109,17 +85,38 @@ export async function judgeFeedback(input: JudgeInput): Promise<JudgeResult> {
     ],
   });
   const parsed = parseJsonObject(res.text);
+  const latencyMs = Date.now() - t0;
+
+  const rationale =
+    typeof parsed.rationale === "string" && parsed.rationale.trim()
+      ? parsed.rationale.trim()
+      : "No rationale returned.";
+
+  if (track === "correct") {
+    return {
+      track: "correct",
+      confirmation_clarity: normalizeScore(parsed.confirmation_clarity),
+      scope_control: normalizeScore(parsed.scope_control),
+      task_focus: null,
+      specificity: null,
+      manageability: null,
+      answer_leakage: null,
+      overall_quality: normalizeScore(parsed.overall_quality),
+      rationale,
+      latencyMs,
+    };
+  }
 
   return {
+    track: "incorrect",
+    confirmation_clarity: null,
+    scope_control: null,
     task_focus: normalizeScore(parsed.task_focus),
     specificity: normalizeScore(parsed.specificity),
     manageability: normalizeScore(parsed.manageability),
-    answer_leakage: input.officialScore >= input.maxScore ? null : normalizeScore(parsed.answer_leakage),
+    answer_leakage: normalizeScore(parsed.answer_leakage),
     overall_quality: normalizeScore(parsed.overall_quality),
-    rationale:
-      typeof parsed.rationale === "string" && parsed.rationale.trim()
-        ? parsed.rationale.trim()
-        : "No rationale returned.",
-    latencyMs: Date.now() - t0,
+    rationale,
+    latencyMs,
   };
 }
