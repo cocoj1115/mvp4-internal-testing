@@ -8,6 +8,8 @@ interface JudgeInput {
   studentResponse: string;
   feedback: string;
   judge: CompareJudgeConfig;
+  officialScore: number;
+  maxScore: number;
 }
 
 export interface JudgeResult extends JudgeScores {
@@ -112,7 +114,7 @@ export async function judgeFeedback(input: JudgeInput): Promise<JudgeResult> {
     task_focus: normalizeScore(parsed.task_focus),
     specificity: normalizeScore(parsed.specificity),
     manageability: normalizeScore(parsed.manageability),
-    answer_leakage: normalizeScore(parsed.answer_leakage),
+    answer_leakage: input.officialScore >= input.maxScore ? null : normalizeScore(parsed.answer_leakage),
     overall_quality: normalizeScore(parsed.overall_quality),
     rationale:
       typeof parsed.rationale === "string" && parsed.rationale.trim()

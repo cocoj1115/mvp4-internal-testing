@@ -255,6 +255,8 @@ export async function POST(req: NextRequest) {
                     studentResponse: input.studentResponse,
                     feedback: result.feedback,
                     judge: compareRequest.judge,
+                    officialScore: input.officialScore,
+                    maxScore: part.maxScore,
                   });
                   row = {
                     ...base,

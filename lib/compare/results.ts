@@ -70,13 +70,16 @@ export function passAnswerLeakage(value: number | ""): boolean | "" {
 }
 
 export function passOverall(row: RawComparisonRow): boolean | "" {
-  const checks = [
+  const checks: Array<boolean | ""> = [
     passTaskFocus(row.task_focus),
     passSpecificity(row.specificity),
     passManageability(row.manageability),
-    passAnswerLeakage(row.answer_leakage),
   ];
-  return checks.every((value) => value === true) ? true : checks.some((value) => value === "") ? "" : false;
+  if (row.answer_leakage !== "") {
+    checks.push(passAnswerLeakage(row.answer_leakage));
+  }
+  if (checks.some((value) => value === "")) return "";
+  return checks.every((value) => value === true);
 }
 
 export function aggregateRows(rows: RawComparisonRow[]): SummaryComparisonRow[] {
