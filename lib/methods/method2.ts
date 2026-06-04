@@ -8,12 +8,13 @@
  * Stage 2 — Feedback: generate feedback for that same part based on the
  * Stage 1 score and failure type.
  *
- * Both calls use response_format: { type: "json_object" } and temperature 0.
+ * Both calls request JSON output and use the selected model-temperature config.
  * tokenCount and latencyMs span the combined duration of both calls.
  */
 
-import { chatComplete } from "@/lib/llm";
 import { QUESTION_MAP, PartLabel } from "@/app/lib/questions";
+import { callCompareLlm } from "@/lib/compare/llm";
+import { GradingModelConfig } from "@/lib/grading-models";
 
 // ── Internal stage types ──────────────────────────────────────────────────────
 
@@ -90,8 +91,7 @@ export async function gradeWithMethod2(
   questionId: string,
   partLabel: PartLabel,
   response: string,
-  model: string,
-  temperature?: number
+  model: GradingModelConfig
 ): Promise<Method2Result> {
   const question = QUESTION_MAP[questionId];
   if (!question) throw new Error(`Unknown questionId: ${questionId}`);
@@ -173,9 +173,10 @@ export async function gradeWithMethod2(
     response.trim() || "(no response)",
   ].join("\n");
 
-  const stage1Completion = await chatComplete({
-    model,
-    temperature,
+  const stage1Completion = await callCompareLlm({
+    provider: model.provider,
+    modelId: model.modelId,
+    temperature: model.temperature,
     jsonMode: true,
     messages: [
       { role: "system", content: stage1System },
@@ -183,9 +184,9 @@ export async function gradeWithMethod2(
     ],
   });
 
-  totalTokens += stage1Completion.tokenCount;
+  totalTokens += stage1Completion.totalTokens;
 
-  const stage1Raw = stage1Completion.content ?? "{}";
+  const stage1Raw = stage1Completion.text || "{}";
   const stage1 = JSON.parse(stage1Raw) as Stage1Response;
 
   // ── Stage 2: Feedback ─────────────────────────────────────────────────────
@@ -260,9 +261,10 @@ export async function gradeWithMethod2(
     JSON.stringify(stage1, null, 2),
   ].join("\n");
 
-  const stage2Completion = await chatComplete({
-    model,
-    temperature,
+  const stage2Completion = await callCompareLlm({
+    provider: model.provider,
+    modelId: model.modelId,
+    temperature: model.temperature,
     jsonMode: true,
     messages: [
       { role: "system", content: stage2System },
@@ -270,9 +272,9 @@ export async function gradeWithMethod2(
     ],
   });
 
-  totalTokens += stage2Completion.tokenCount;
+  totalTokens += stage2Completion.totalTokens;
 
-  const stage2Raw = stage2Completion.content ?? "{}";
+  const stage2Raw = stage2Completion.text || "{}";
   const stage2 = JSON.parse(stage2Raw) as Stage2Response;
 
   const latencyMs = Date.now() - t0;

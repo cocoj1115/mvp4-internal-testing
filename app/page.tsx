@@ -8,50 +8,19 @@ import {
   QuestionTable,
 } from "@/app/lib/questions";
 import type { GradeResponse } from "@/app/api/grade/route";
-
-// ─── Grading config ───────────────────────────────────────────────────────────
-
-interface GradingConfig {
-  model: string;
-  temperature: number | undefined;
-}
-
-const GRADING_CONFIGS: Array<GradingConfig & { id: string; label: string }> = [
-  { id: "claude-sonnet-4-6:t0",        model: "claude-sonnet-4-6",      temperature: 0,         label: "Claude Sonnet 4.6 — temp 0" },
-  { id: "claude-sonnet-4-6:t0.5",      model: "claude-sonnet-4-6",      temperature: 0.5,       label: "Claude Sonnet 4.6 — temp 0.5" },
-  { id: "claude-sonnet-4-6:t1",        model: "claude-sonnet-4-6",      temperature: 1,         label: "Claude Sonnet 4.6 — temp 1" },
-  { id: "claude-opus-4-8",             model: "claude-opus-4-8",        temperature: undefined, label: "Claude Opus 4.8 (temperature n/a)" },
-  { id: "gpt-5.4:t0",                  model: "gpt-5.4",                temperature: 0,         label: "GPT-5.4 — temp 0" },
-  { id: "gpt-5.4:t0.5",               model: "gpt-5.4",                temperature: 0.5,       label: "GPT-5.4 — temp 0.5" },
-  { id: "gpt-5.4:t1",                  model: "gpt-5.4",                temperature: 1,         label: "GPT-5.4 — temp 1" },
-  { id: "gpt-5.4-mini:t0",             model: "gpt-5.4-mini",           temperature: 0,         label: "GPT-5.4 mini — temp 0" },
-  { id: "gpt-5.4-mini:t0.5",          model: "gpt-5.4-mini",           temperature: 0.5,       label: "GPT-5.4 mini — temp 0.5" },
-  { id: "gpt-5.4-mini:t1",             model: "gpt-5.4-mini",           temperature: 1,         label: "GPT-5.4 mini — temp 1" },
-  { id: "gpt-5.4-nano:t0",             model: "gpt-5.4-nano",           temperature: 0,         label: "GPT-5.4 nano — temp 0" },
-  { id: "gpt-5.4-nano:t0.5",          model: "gpt-5.4-nano",           temperature: 0.5,       label: "GPT-5.4 nano — temp 0.5" },
-  { id: "gpt-5.4-nano:t1",             model: "gpt-5.4-nano",           temperature: 1,         label: "GPT-5.4 nano — temp 1" },
-  { id: "gemini-3.1-flash-lite:t0",    model: "gemini-3.1-flash-lite",  temperature: 0,         label: "Gemini 3.1 Flash Lite — temp 0" },
-  { id: "gemini-3.1-flash-lite:t0.5", model: "gemini-3.1-flash-lite",  temperature: 0.5,       label: "Gemini 3.1 Flash Lite — temp 0.5" },
-  { id: "gemini-3.1-flash-lite:t1",   model: "gemini-3.1-flash-lite",  temperature: 1,         label: "Gemini 3.1 Flash Lite — temp 1" },
-];
-
-const DEFAULT_GRADING_CONFIG_ID = "gpt-5.4:t0";
-
-function readGradingConfig(questionId: string): GradingConfig {
-  try {
-    const stored = localStorage.getItem("biobridge_grading_configs");
-    if (stored) {
-      const parsed = JSON.parse(stored) as Record<string, { model?: string; temperature?: number }>;
-      const cfg = parsed[questionId];
-      if (cfg?.model) return { model: cfg.model, temperature: cfg.temperature };
-    }
-  } catch { /* ignore */ }
-  return { model: "gpt-5.4", temperature: 0 };
-}
+import {
+  DEFAULT_GRADING_MODEL_IDS,
+  STUDENT_GRADING_MODEL_OPTIONS,
+  defaultGradingModelForMethod,
+  findGradingModelConfig,
+  type GradingModelConfig,
+  type StudentMethod,
+} from "@/lib/grading-models";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Method = 1 | 2 | 3;
+type ModelAssignment = Record<string, string>;
 type PartStatus = "locked" | "active" | "done";
 
 interface AttemptRecord {
@@ -154,52 +123,95 @@ function Spinner() {
   );
 }
 
+// ─── Setup: Method Assignment ────────────────────────────────────────────────
+
+function methodKey(method: Method): StudentMethod {
+  return String(method) as StudentMethod;
+}
+
+function modelOptionLabel(model: GradingModelConfig): string {
+  return model.label.replace("provider default", `temp ${model.temperature}`);
+}
+
+function MethodAssignment({ onSave }: { onSave: (assignment: Record<string, Method>, modelAssignment: ModelAssignment) => void }) {
+  const [assignment, setAssignment] = useState<Record<string, Method>>({
+    M1Q14: 1, M1Q15: 1, M2Q14: 1, M2Q15: 1,
+  });
+  const [modelAssignment, setModelAssignment] = useState<ModelAssignment>({
+    M1Q14: DEFAULT_GRADING_MODEL_IDS["1"],
+    M1Q15: DEFAULT_GRADING_MODEL_IDS["1"],
+    M2Q14: DEFAULT_GRADING_MODEL_IDS["1"],
+    M2Q15: DEFAULT_GRADING_MODEL_IDS["1"],
+  });
+
+  const methodLabels: Record<Method, string> = {
+    1: "Method 1 — GradeOpt + RAG",
+    2: "Method 2 — Two-Stage Error-Aware",
+    3: "Method 3 — Feedback-First",
+  };
+
+  function handleMethodChange(questionId: string, method: Method) {
+    setAssignment((prev) => ({ ...prev, [questionId]: method }));
+    setModelAssignment((prev) => ({
+      ...prev,
+      [questionId]: DEFAULT_GRADING_MODEL_IDS[methodKey(method)],
+    }));
+  }
+
+  return (
+    <div className="space-y-5">
+      <p className="text-sm text-gray-600">
+        Assign a grading method and model-temperature condition to each question. Students will not see this.
+      </p>
+      <div className="rounded-xl border border-gray-200 overflow-hidden divide-y divide-gray-100">
+        {QUESTIONS.map((q) => (
+          <div key={q.id} className="grid gap-3 px-5 py-4 bg-white md:grid-cols-[160px_minmax(220px,1fr)_minmax(280px,1.2fr)] md:items-center">
+            <div className="min-w-0">
+              <span className="block text-sm font-semibold text-gray-800">{q.id}</span>
+              <span className="block text-xs text-gray-400 font-mono">Standard {q.standard}</span>
+            </div>
+            <select
+              value={assignment[q.id]}
+              onChange={(e) => handleMethodChange(q.id, parseInt(e.target.value) as Method)}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              {([1, 2, 3] as Method[]).map((m) => (
+                <option key={m} value={m}>{methodLabels[m]}</option>
+              ))}
+            </select>
+            <select
+              value={modelAssignment[q.id] ?? DEFAULT_GRADING_MODEL_IDS[methodKey(assignment[q.id] ?? 1)]}
+              onChange={(e) => setModelAssignment((prev) => ({ ...prev, [q.id]: e.target.value }))}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              {STUDENT_GRADING_MODEL_OPTIONS[methodKey(assignment[q.id] ?? 1)].map((model, index) => (
+                <option key={model.id} value={model.id}>
+                  {index === 0 ? "Default: " : index === 1 ? "Backup: " : ""}
+                  {modelOptionLabel(model)}
+                </option>
+              ))}
+            </select>
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-end">
+        <button
+          onClick={() => onSave(assignment, modelAssignment)}
+          className="px-5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition"
+        >
+          Save &amp; Start →
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Setup mode ───────────────────────────────────────────────────────────────
 
-const METHOD_LABELS: Record<Method, string> = {
-  1: "Method 1 — GradeOpt + RAG",
-  2: "Method 2 — Two-Stage Error-Aware",
-  3: "Method 3 — Feedback-First",
-};
-
 function SetupMode({ onComplete }: { onComplete: () => void }) {
-  const defaultConfigs = Object.fromEntries(QUESTIONS.map((q) => [q.id, DEFAULT_GRADING_CONFIG_ID]));
-  const defaultMethods = Object.fromEntries(QUESTIONS.map((q) => [q.id, 1 as Method]));
-
-  const [methods, setMethods] = useState<Record<string, Method>>(() => {
-    try {
-      const stored = localStorage.getItem("biobridge_method_assignment");
-      if (stored) return JSON.parse(stored) as Record<string, Method>;
-    } catch { /* ignore */ }
-    return defaultMethods;
-  });
-
-  const [configIds, setConfigIds] = useState<Record<string, string>>(() => {
-    try {
-      const stored = localStorage.getItem("biobridge_grading_configs");
-      if (stored) {
-        const parsed = JSON.parse(stored) as Record<string, { model: string; temperature?: number }>;
-        return Object.fromEntries(
-          QUESTIONS.map((q) => {
-            const cfg = parsed[q.id];
-            const match = cfg && GRADING_CONFIGS.find((c) => c.model === cfg.model && c.temperature === cfg.temperature);
-            return [q.id, match ? match.id : DEFAULT_GRADING_CONFIG_ID];
-          })
-        );
-      }
-    } catch { /* ignore */ }
-    return defaultConfigs;
-  });
-
-  function handleSave() {
-    localStorage.setItem("biobridge_method_assignment", JSON.stringify(methods));
-    const gradingConfigs = Object.fromEntries(
-      QUESTIONS.map((q) => {
-        const cfg = GRADING_CONFIGS.find((c) => c.id === configIds[q.id]) ?? GRADING_CONFIGS[4];
-        return [q.id, { model: cfg.model, temperature: cfg.temperature }];
-      })
-    );
-    localStorage.setItem("biobridge_grading_configs", JSON.stringify(gradingConfigs));
+  function handleSave(assignment: Record<string, Method>, modelAssignment: ModelAssignment) {
+    localStorage.setItem("biobridge_method_assignment", JSON.stringify(assignment));
+    localStorage.setItem("biobridge_model_assignment", JSON.stringify(modelAssignment));
     localStorage.setItem("biobridge_setup_complete", "true");
     onComplete();
   }
@@ -211,81 +223,23 @@ function SetupMode({ onComplete }: { onComplete: () => void }) {
       if (k && k.startsWith("biobridge_")) toRemove.push(k);
     }
     toRemove.forEach((k) => localStorage.removeItem(k));
-    localStorage.removeItem("biobridge_grading_configs");
     window.location.reload();
   }
 
-  const selectClass = "w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition";
-
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center py-12 px-4">
-      <div className="w-full max-w-xl space-y-5">
-
-        {/* Header */}
-        <div className="text-center space-y-1">
-          <div className="inline-flex items-center gap-2 mb-2">
-            <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block" />
-            <span className="text-xs font-semibold text-indigo-600 uppercase tracking-widest">Internal Testing</span>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">BioBridge Setup</h1>
-          <p className="text-sm text-gray-400">Assign a method and model to each question. Students will not see this.</p>
+    <div className="min-h-screen bg-gray-50 py-12 px-4">
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">BioBridge — Setup</h1>
+          <p className="text-sm text-gray-500 mt-1">Method Assignment</p>
         </div>
 
-        {/* Question cards */}
-        <div className="space-y-3">
-          {QUESTIONS.map((q) => (
-            <div key={q.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
-              {/* Question info */}
-              <div className="flex items-start justify-between">
-                <div>
-                  <span className="text-base font-bold text-gray-900">{q.id}</span>
-                  <span className="ml-2 text-xs text-indigo-500 font-mono bg-indigo-50 px-1.5 py-0.5 rounded">{q.standard}</span>
-                  <p className="text-xs text-gray-400 mt-0.5">{q.topic}</p>
-                </div>
-              </div>
-
-              {/* Selectors */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Method</label>
-                  <select
-                    value={methods[q.id] ?? 1}
-                    onChange={(e) => setMethods((prev) => ({ ...prev, [q.id]: parseInt(e.target.value) as Method }))}
-                    className={selectClass}
-                  >
-                    {([1, 2, 3] as Method[]).map((m) => (
-                      <option key={m} value={m}>{METHOD_LABELS[m]}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Model &amp; Temp</label>
-                  <select
-                    value={configIds[q.id] ?? DEFAULT_GRADING_CONFIG_ID}
-                    onChange={(e) => setConfigIds((prev) => ({ ...prev, [q.id]: e.target.value }))}
-                    className={selectClass}
-                  >
-                    {GRADING_CONFIGS.map((c) => (
-                      <option key={c.id} value={c.id}>{c.label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+          <MethodAssignment onSave={handleSave} />
         </div>
 
-        {/* Save button */}
-        <button
-          onClick={handleSave}
-          className="w-full py-3 rounded-2xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 active:scale-[0.98] transition shadow-sm"
-        >
-          Save &amp; Start →
-        </button>
-
-        {/* Reset */}
         <div className="text-center">
-          <button onClick={handleReset} className="text-xs text-gray-300 hover:text-gray-500 transition">
+          <button onClick={handleReset} className="text-xs text-gray-400 hover:text-gray-600 transition">
             Reset setup
           </button>
         </div>
@@ -570,12 +524,14 @@ function PartPlayer({
 function QuestionPlayer({
   question,
   method,
+  modelConfig,
   questionIndex,
   totalQuestions,
   onNextQuestion,
 }: {
   question: Question;
   method: Method;
+  modelConfig: GradingModelConfig;
   questionIndex: number;
   totalQuestions: number;
   onNextQuestion: () => void;
@@ -623,16 +579,13 @@ function QuestionPlayer({
         }
       });
 
-      const gradingConfig = readGradingConfig(question.id);
-
       const body: Record<string, unknown> = {
         questionId: question.id,
         partLabel,
         studentResponse: response,
         method: session.method.toString(),
+        modelConfig,
         attemptNumber,
-        model: gradingConfig.model,
-        temperature: gradingConfig.temperature,
       };
       if (attemptNumber === 2 && attempt1) {
         body.attempt1Feedback = attempt1.feedback;
@@ -647,8 +600,7 @@ function QuestionPlayer({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = await res.json() as GradeResponse & { error?: string };
-      if (!res.ok) throw new Error(data.error ?? `Server error ${res.status}`);
+      const data = await res.json() as GradeResponse;
 
       const record: AttemptRecord = {
         attemptNumber,
@@ -791,6 +743,12 @@ function StudentMode() {
     } catch { return {} as Record<string, Method>; }
   })();
 
+  const modelAssignment = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("biobridge_model_assignment") ?? "{}") as ModelAssignment;
+    } catch { return {} as ModelAssignment; }
+  })();
+
   function handleNextQuestion() {
     const nextIndex = currentIndex + 1;
     setCurrentIndex(nextIndex);
@@ -810,12 +768,16 @@ function StudentMode() {
   const questionId = QUESTION_SEQUENCE[currentIndex]!;
   const question = QUESTIONS.find((q) => q.id === questionId)!;
   const method: Method = (methodAssignment[questionId] ?? 1) as Method;
+  const modelConfig =
+    findGradingModelConfig(modelAssignment[questionId] ?? "") ??
+    defaultGradingModelForMethod(methodKey(method));
 
   return (
     <QuestionPlayer
       key={question.id}
       question={question}
       method={method}
+      modelConfig={modelConfig}
       questionIndex={currentIndex + 1}
       totalQuestions={QUESTION_SEQUENCE.length}
       onNextQuestion={handleNextQuestion}

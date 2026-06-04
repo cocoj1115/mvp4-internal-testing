@@ -9,7 +9,8 @@
  */
 
 import { PartLabel, QUESTION_MAP } from "@/app/lib/questions";
-import { chatComplete } from "@/lib/llm";
+import { callCompareLlm } from "@/lib/compare/llm";
+import { GradingModelConfig } from "@/lib/grading-models";
 
 type Confidence = "high" | "medium" | "low";
 
@@ -268,8 +269,7 @@ export async function gradeWithMethod3(
   questionId: string,
   partLabel: PartLabel,
   studentResponse: string,
-  model: string,
-  temperature?: number
+  model: GradingModelConfig
 ): Promise<Method3Result> {
   const question = QUESTION_MAP[questionId];
   if (!question) throw new Error(`Unknown questionId: ${questionId}`);
@@ -332,9 +332,10 @@ export async function gradeWithMethod3(
     `Student response:\n${studentResponse.trim() || "(no response)"}`,
   ].join("\n");
 
-  const completion = await chatComplete({
-    model,
-    temperature,
+  const completion = await callCompareLlm({
+    provider: model.provider,
+    modelId: model.modelId,
+    temperature: model.temperature,
     jsonMode: true,
     messages: [
       { role: "system", content: systemPrompt },
@@ -342,7 +343,7 @@ export async function gradeWithMethod3(
     ],
   });
 
-  const raw = completion.content ?? "{}";
+  const raw = completion.text || "{}";
   const parsed = JSON.parse(raw) as Method3RawResponse;
   const score = normalizeScore(parsed.score, part.maxScore);
   const feedback = normalizeMethod3Feedback(parsed, score, part.maxScore);
@@ -351,7 +352,7 @@ export async function gradeWithMethod3(
     console.warn("[method3] Feedback was missing or not a direct string.", {
       questionId,
       partLabel,
-      model,
+      model: model.id,
       responseKeys: Object.keys(parsed),
       raw: raw.slice(0, 800),
     });
@@ -361,7 +362,7 @@ export async function gradeWithMethod3(
     score,
     feedback,
     confidence: normalizeConfidence(parsed.confidence),
-    tokenCount: completion.tokenCount,
+    tokenCount: completion.totalTokens,
     latencyMs: Date.now() - t0,
   };
 }

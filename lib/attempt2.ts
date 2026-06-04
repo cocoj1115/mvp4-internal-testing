@@ -1,14 +1,15 @@
-import { chatComplete } from "@/lib/llm";
+import { callCompareLlm } from "@/lib/compare/llm";
+import { GradingModelConfig } from "@/lib/grading-models";
 
 export async function classifyResolution(
   attempt1Gap: string,
   attempt2Response: string,
-  model: string,
-  temperature?: number
+  model: GradingModelConfig
 ): Promise<"fully" | "partially" | "not_at_all"> {
-  const res = await chatComplete({
-    model,
-    temperature,
+  const res = await callCompareLlm({
+    provider: model.provider,
+    modelId: model.modelId,
+    temperature: 0,
     messages: [
       {
         role: "system",
@@ -21,7 +22,7 @@ export async function classifyResolution(
       },
     ],
   });
-  const raw = res.content.trim().toLowerCase();
+  const raw = res.text.trim().toLowerCase();
   if (raw.startsWith("not") || raw.includes("not_at_all") || raw.includes("not at all"))
     return "not_at_all";
   if (raw.startsWith("partial") || raw.includes("partial")) return "partially";
@@ -36,8 +37,7 @@ export interface Attempt2Options {
   partLabel: string;
   partPrompt: string;
   studentResponse: string;
-  model: string;
-  temperature?: number;
+  model: GradingModelConfig;
 }
 
 export async function handleAttempt2(
@@ -52,7 +52,6 @@ export async function handleAttempt2(
     partPrompt,
     studentResponse,
     model,
-    temperature,
   } = options;
 
   const feedbackInstruction =
@@ -96,9 +95,10 @@ export async function handleAttempt2(
     `Student attempt 2 response: ${studentResponse}`,
   ].join("\n");
 
-  const feedbackCompletion = await chatComplete({
-    model,
-    temperature,
+  const feedbackCompletion = await callCompareLlm({
+    provider: model.provider,
+    modelId: model.modelId,
+    temperature: model.temperature,
     messages: [
       { role: "system", content: feedbackSystemPrompt },
       { role: "user", content: feedbackUserPrompt },
@@ -106,7 +106,7 @@ export async function handleAttempt2(
   });
 
   return {
-    feedback: feedbackCompletion.content.trim() || "No feedback returned.",
-    tokenCount: feedbackCompletion.tokenCount,
+    feedback: feedbackCompletion.text.trim() || "No feedback returned.",
+    tokenCount: feedbackCompletion.totalTokens,
   };
 }

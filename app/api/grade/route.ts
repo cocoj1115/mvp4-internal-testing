@@ -7,7 +7,12 @@ import { gradeWithMethod1 } from "@/lib/methods/method1";
 import { gradeWithMethod2 } from "@/lib/methods/method2";
 import { gradeWithMethod3 } from "@/lib/methods/method3";
 import { classifyResolution, handleAttempt2 } from "@/lib/attempt2";
-import { DEFAULT_GRADING_MODEL } from "@/lib/grading-models";
+import {
+  defaultGradingModelForMethod,
+  normalizeGradingModelConfig,
+  type GradingModelConfig,
+  type StudentMethod,
+} from "@/lib/grading-models";
 
 export interface GradeRequest {
   questionId: string;
@@ -15,7 +20,7 @@ export interface GradeRequest {
   studentResponse: string;
   method?: string;
   model?: string;
-  temperature?: number;
+  modelConfig?: GradingModelConfig;
   attemptNumber?: 1 | 2;
   attempt1Feedback?: string;
   attempt1Gap?: string;
@@ -28,6 +33,7 @@ export interface GradeResponse {
   feedback: string;
   tokenCount?: number;
   model?: string;
+  modelConfig?: GradingModelConfig;
   diagnosedGap: string;
   resolution?: "fully" | "partially" | "not_at_all";
 }
@@ -69,7 +75,7 @@ export async function POST(req: NextRequest) {
       studentResponse,
       method,
       model,
-      temperature,
+      modelConfig,
       attemptNumber = 1,
       attempt1Feedback,
       attempt1Gap,
@@ -77,7 +83,14 @@ export async function POST(req: NextRequest) {
       taskType,
     } = body;
 
-    const gradingModel = (typeof model === "string" && model.trim()) ? model.trim() : DEFAULT_GRADING_MODEL;
+    const methodId: StudentMethod = method === "2" || method === "3" ? method : "1";
+    const gradingModel =
+      normalizeGradingModelConfig(modelConfig) ??
+      normalizeGradingModelConfig(model) ??
+      defaultGradingModelForMethod(methodId);
+    if (!gradingModel) {
+      return NextResponse.json({ error: "Unsupported grading model configuration." }, { status: 400 });
+    }
 
     const question = QUESTION_MAP[questionId];
     if (!question) return NextResponse.json({ error: "Unknown question ID" }, { status: 400 });
@@ -90,7 +103,8 @@ export async function POST(req: NextRequest) {
         score: 0,
         feedback: "No response was submitted.",
         diagnosedGap: "Student submitted empty response.",
-        model: gradingModel,
+        model: gradingModel.modelId,
+        modelConfig: gradingModel,
       });
     }
 
@@ -101,14 +115,14 @@ export async function POST(req: NextRequest) {
     let diagnosedGap: string;
     let tokenCount: number;
 
-    if (method === "2") {
-      const result = await gradeWithMethod2(questionId, partLabel, studentResponse, gradingModel, temperature);
+    if (methodId === "2") {
+      const result = await gradeWithMethod2(questionId, partLabel, studentResponse, gradingModel);
       score = result.score;
       feedback = result.feedback;
       diagnosedGap = result.score >= part.maxScore ? "none" : result.feedback;
       tokenCount = result.tokenCount;
-    } else if (method === "3") {
-      const result = await gradeWithMethod3(questionId, partLabel, studentResponse, gradingModel, temperature);
+    } else if (methodId === "3") {
+      const result = await gradeWithMethod3(questionId, partLabel, studentResponse, gradingModel);
       score = result.score;
       feedback = result.feedback;
       diagnosedGap = result.score >= part.maxScore ? "none" : result.feedback;
@@ -124,7 +138,6 @@ export async function POST(req: NextRequest) {
         kbContext,
         priorGaps: priorGaps ?? {},
         taskType,
-        temperature,
         part: { prompt: part.prompt, maxScore: part.maxScore, scoringGuidance: part.scoringGuidance },
         questionStem: question.stem,
       });
@@ -141,7 +154,8 @@ export async function POST(req: NextRequest) {
         feedback,
         diagnosedGap,
         tokenCount,
-        model: gradingModel,
+        model: gradingModel.modelId,
+        modelConfig: gradingModel,
       });
     }
 
@@ -149,8 +163,7 @@ export async function POST(req: NextRequest) {
     const resolution = await classifyResolution(
       attempt1Gap ?? diagnosedGap,
       studentResponse,
-      gradingModel,
-      temperature
+      gradingModel
     );
 
     const attempt2Result = await handleAttempt2({
@@ -162,7 +175,6 @@ export async function POST(req: NextRequest) {
       partPrompt: part.prompt,
       studentResponse,
       model: gradingModel,
-      temperature,
     });
 
     return NextResponse.json<GradeResponse>({
@@ -170,14 +182,14 @@ export async function POST(req: NextRequest) {
       feedback: attempt2Result.feedback,
       diagnosedGap,
       tokenCount: tokenCount + attempt2Result.tokenCount,
-      model: gradingModel,
+      model: gradingModel.modelId,
+      modelConfig: gradingModel,
       resolution,
     });
   } catch (err) {
     console.error("[/api/grade] Error:", err);
     const openAiResponse = openAiErrorResponse(err);
     if (openAiResponse) return openAiResponse;
-    const message = err instanceof Error ? err.message : "Internal server error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
