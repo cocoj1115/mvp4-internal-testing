@@ -818,9 +818,241 @@ function QuestionPlayer({
   );
 }
 
-// ─── Student mode ─────────────────────────────────────────────────────────────
+// ─── Summary view ─────────────────────────────────────────────────────────────
 
 const QUESTION_SEQUENCE = ["M1Q14", "M1Q15", "M2Q14", "M2Q15"] as const;
+
+function SummaryView() {
+  const questions = QUESTION_SEQUENCE.map((qId) => QUESTIONS.find((q) => q.id === qId)!);
+
+  const sessions = QUESTION_SEQUENCE.map((qId) => {
+    try {
+      const stored = localStorage.getItem(`biobridge_session_${qId}`);
+      if (stored) return JSON.parse(stored) as SessionState;
+    } catch { /* ignore */ }
+    return null;
+  });
+
+  const [expanded, setExpanded] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(QUESTION_SEQUENCE.map((qId) => [qId, true]))
+  );
+
+  const [diagramExpanded, setDiagramExpanded] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(QUESTION_SEQUENCE.map((qId) => [qId, true]))
+  );
+
+  function toggleExpanded(qId: string) {
+    setExpanded((prev) => ({ ...prev, [qId]: !prev[qId] }));
+  }
+
+  function toggleDiagram(qId: string) {
+    setDiagramExpanded((prev) => ({ ...prev, [qId]: !prev[qId] }));
+  }
+
+  function handleReset() {
+    const toRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith("biobridge_")) toRemove.push(k);
+    }
+    toRemove.forEach((k) => localStorage.removeItem(k));
+    window.location.reload();
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-10 px-4">
+      <div className="max-w-6xl mx-auto space-y-4">
+
+        {/* Header */}
+        <div className="text-center space-y-1 mb-8">
+          <div className="inline-flex items-center gap-2 mb-1">
+            <svg className="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+            </svg>
+            <span className="text-xs font-semibold text-emerald-600 uppercase tracking-widest">Complete</span>
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Session Summary</h1>
+          <p className="text-sm text-gray-400">All questions and feedback from this session.</p>
+        </div>
+
+        {/* Question sections */}
+        {questions.map((question, qi) => {
+          const session = sessions[qi];
+          const isOpen = expanded[question.id] ?? true;
+
+          const totalScore = question.parts.reduce((sum, part) => {
+            const last = session?.parts[part.label]?.attempts.at(-1);
+            return sum + (last?.score ?? 0);
+          }, 0);
+          const maxTotal = question.parts.reduce((sum, p) => sum + p.maxScore, 0);
+
+          return (
+            <div key={question.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+
+              {/* Collapsible header */}
+              <button
+                type="button"
+                onClick={() => toggleExpanded(question.id)}
+                className="w-full flex items-center justify-between px-6 py-4 bg-white hover:bg-gray-50 transition text-left"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <svg
+                    className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}
+                    fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-bold text-indigo-600">{question.id}</span>
+                      <span className="text-xs text-gray-300">·</span>
+                      <span className="text-sm font-medium text-gray-700">{question.topic}</span>
+                    </div>
+                  </div>
+                </div>
+                <span className={`shrink-0 ml-4 text-xs font-semibold px-2.5 py-1 rounded-full ${
+                  totalScore === maxTotal
+                    ? "bg-emerald-100 text-emerald-700"
+                    : totalScore === 0
+                      ? "bg-rose-100 text-rose-700"
+                      : "bg-amber-100 text-amber-700"
+                }`}>
+                  {totalScore} / {maxTotal}
+                </span>
+              </button>
+
+              {/* Expanded body — two-column layout */}
+              {isOpen && (
+                <div className="border-t border-gray-100 flex flex-col md:flex-row">
+
+                  {/* Left column — question context (sticky) */}
+                  <div className="w-full md:w-2/5 md:shrink-0 md:self-start md:sticky md:top-0 bg-gray-50 border-b border-gray-200 md:border-b-0 md:border-r md:border-gray-200 p-5 space-y-3">
+                    <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[11px] font-bold text-indigo-600 uppercase tracking-widest">{question.id}</span>
+                        <span className="text-[11px] text-gray-300">·</span>
+                        <span className="text-[11px] font-mono text-gray-500">Standard {question.standard}</span>
+                      </div>
+                      <p className="text-sm text-gray-700 leading-relaxed">{question.stem}</p>
+                    </div>
+                    {(question.imageUrl || question.table) && (
+                      <div className="space-y-1.5">
+                        <button
+                          type="button"
+                          onClick={() => toggleDiagram(question.id)}
+                          className="inline-flex items-center gap-1 text-[11px] text-gray-400 hover:text-gray-600 transition"
+                        >
+                          <svg
+                            className={`w-3 h-3 transition-transform ${diagramExpanded[question.id] ? "rotate-90" : ""}`}
+                            fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                          </svg>
+                          {diagramExpanded[question.id] ? "Hide diagram" : "Show diagram"}
+                        </button>
+                        {diagramExpanded[question.id] && (
+                          question.imageUrl
+                            ? <QuestionImage src={question.imageUrl} />
+                            : question.table
+                              ? <QuestionTableBlock table={question.table} />
+                              : null
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right column — parts + attempts */}
+                  <div className="flex-1 min-w-0 divide-y divide-gray-100">
+                    {question.parts.map((part) => {
+                      const partState = session?.parts[part.label];
+                      const attempts = partState?.attempts ?? [];
+                      const finalScore = attempts.at(-1)?.score ?? 0;
+                      const passed = finalScore >= part.maxScore;
+
+                      return (
+                        <div key={part.label} className="p-5 space-y-4">
+
+                          {/* Part label + prompt */}
+                          <div className="flex items-start gap-3">
+                            <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold shrink-0 mt-0.5 ${
+                              passed ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                            }`}>
+                              {part.label}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-800 leading-relaxed">{part.prompt}</p>
+                              <span className={`inline-block mt-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                                passed ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                              }`}>
+                                {finalScore} / {part.maxScore} pts
+                              </span>
+                            </div>
+                          </div>
+
+                          {attempts.length === 0 ? (
+                            <p className="text-xs text-gray-400 italic pl-9">No response recorded.</p>
+                          ) : (
+                            <div className="pl-9 space-y-4">
+                              {/* All attempts */}
+                              {attempts.map((attempt, idx) => {
+                                const attemptPassed = attempt.score >= part.maxScore;
+                                return (
+                                  <div key={idx} className="space-y-2">
+                                    <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                                      Attempt {idx + 1}
+                                    </p>
+                                    <div className="space-y-1">
+                                      <p className="text-[11px] text-gray-400 uppercase tracking-wide">Answer</p>
+                                      <p className="text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2.5 leading-relaxed border border-gray-100">
+                                        {attempt.response}
+                                      </p>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <p className="text-[11px] text-gray-400 uppercase tracking-wide">Feedback</p>
+                                      <div className={`rounded-xl px-4 py-3 text-sm leading-relaxed ${
+                                        attemptPassed
+                                          ? "bg-emerald-50 text-emerald-900"
+                                          : "bg-rose-50 text-rose-900"
+                                      }`}>
+                                        {attempt.feedback}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+
+                              {/* Model answer */}
+                              <div className="space-y-1 pt-1">
+                                <p className="text-[11px] text-gray-400 uppercase tracking-wide">Model Answer</p>
+                                <p className="text-sm text-gray-500 bg-slate-50 rounded-lg px-3 py-2.5 leading-relaxed border border-slate-100">
+                                  {part.modelAnswer}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Reset */}
+        <div className="text-center pb-8 pt-4">
+          <button onClick={handleReset} className="text-xs text-gray-300 hover:text-gray-500 transition">
+            Reset setup
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Student mode ─────────────────────────────────────────────────────────────
 
 function StudentMode() {
   const [currentIndex, setCurrentIndex] = useState(() => {
@@ -855,13 +1087,7 @@ function StudentMode() {
   }
 
   if (currentIndex >= QUESTION_SEQUENCE.length) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-        <p className="text-lg font-semibold text-gray-800 text-center">
-          You&apos;ve completed all questions. Thank you!
-        </p>
-      </div>
-    );
+    return <SummaryView />;
   }
 
   const questionId = QUESTION_SEQUENCE[currentIndex]!;
