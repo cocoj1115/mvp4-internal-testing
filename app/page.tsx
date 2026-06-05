@@ -130,87 +130,49 @@ function methodKey(method: Method): StudentMethod {
 }
 
 function modelOptionLabel(model: GradingModelConfig): string {
-  return model.label.replace("provider default", `temp ${model.temperature}`);
+  return model.label;
 }
 
-function MethodAssignment({ onSave }: { onSave: (assignment: Record<string, Method>, modelAssignment: ModelAssignment) => void }) {
-  const [assignment, setAssignment] = useState<Record<string, Method>>({
-    M1Q14: 1, M1Q15: 1, M2Q14: 1, M2Q15: 1,
-  });
-  const [modelAssignment, setModelAssignment] = useState<ModelAssignment>({
-    M1Q14: DEFAULT_GRADING_MODEL_IDS["1"],
-    M1Q15: DEFAULT_GRADING_MODEL_IDS["1"],
-    M2Q14: DEFAULT_GRADING_MODEL_IDS["1"],
-    M2Q15: DEFAULT_GRADING_MODEL_IDS["1"],
+// ─── Setup mode ───────────────────────────────────────────────────────────────
+
+const METHOD_LABELS: Record<Method, string> = {
+  1: "Method 1 — GradeOpt + RAG",
+  2: "Method 2 — Two-Stage Error-Aware",
+  3: "Method 3 — Feedback-First",
+};
+
+function SetupMode({ onComplete }: { onComplete: () => void }) {
+  const defaultMethods = Object.fromEntries(QUESTIONS.map((q) => [q.id, 1 as Method]));
+  const defaultModelAssignment = Object.fromEntries(
+    QUESTIONS.map((q) => [q.id, DEFAULT_GRADING_MODEL_IDS["1"]])
+  );
+
+  const [methods, setMethods] = useState<Record<string, Method>>(() => {
+    try {
+      const stored = localStorage.getItem("biobridge_method_assignment");
+      if (stored) return JSON.parse(stored) as Record<string, Method>;
+    } catch { /* ignore */ }
+    return defaultMethods;
   });
 
-  const methodLabels: Record<Method, string> = {
-    1: "Method 1 — GradeOpt + RAG",
-    2: "Method 2 — Two-Stage Error-Aware",
-    3: "Method 3 — Feedback-First",
-  };
+  const [modelAssignment, setModelAssignment] = useState<ModelAssignment>(() => {
+    try {
+      const stored = localStorage.getItem("biobridge_model_assignment");
+      if (stored) return JSON.parse(stored) as ModelAssignment;
+    } catch { /* ignore */ }
+    return defaultModelAssignment;
+  });
 
   function handleMethodChange(questionId: string, method: Method) {
-    setAssignment((prev) => ({ ...prev, [questionId]: method }));
+    setMethods((prev) => ({ ...prev, [questionId]: method }));
     setModelAssignment((prev) => ({
       ...prev,
       [questionId]: DEFAULT_GRADING_MODEL_IDS[methodKey(method)],
     }));
   }
 
-  return (
-    <div className="space-y-5">
-      <p className="text-sm text-gray-600">
-        Assign a grading method and model-temperature condition to each question. Students will not see this.
-      </p>
-      <div className="rounded-xl border border-gray-200 overflow-hidden divide-y divide-gray-100">
-        {QUESTIONS.map((q) => (
-          <div key={q.id} className="grid gap-3 px-5 py-4 bg-white md:grid-cols-[160px_minmax(220px,1fr)_minmax(280px,1.2fr)] md:items-center">
-            <div className="min-w-0">
-              <span className="block text-sm font-semibold text-gray-800">{q.id}</span>
-              <span className="block text-xs text-gray-400 font-mono">Standard {q.standard}</span>
-            </div>
-            <select
-              value={assignment[q.id]}
-              onChange={(e) => handleMethodChange(q.id, parseInt(e.target.value) as Method)}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              {([1, 2, 3] as Method[]).map((m) => (
-                <option key={m} value={m}>{methodLabels[m]}</option>
-              ))}
-            </select>
-            <select
-              value={modelAssignment[q.id] ?? DEFAULT_GRADING_MODEL_IDS[methodKey(assignment[q.id] ?? 1)]}
-              onChange={(e) => setModelAssignment((prev) => ({ ...prev, [q.id]: e.target.value }))}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              {STUDENT_GRADING_MODEL_OPTIONS[methodKey(assignment[q.id] ?? 1)].map((model, index) => (
-                <option key={model.id} value={model.id}>
-                  {index === 0 ? "Default: " : index === 1 ? "Backup: " : ""}
-                  {modelOptionLabel(model)}
-                </option>
-              ))}
-            </select>
-          </div>
-        ))}
-      </div>
-      <div className="flex justify-end">
-        <button
-          onClick={() => onSave(assignment, modelAssignment)}
-          className="px-5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition"
-        >
-          Save &amp; Start →
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Setup mode ───────────────────────────────────────────────────────────────
-
-function SetupMode({ onComplete }: { onComplete: () => void }) {
-  function handleSave(assignment: Record<string, Method>, modelAssignment: ModelAssignment) {
-    localStorage.setItem("biobridge_method_assignment", JSON.stringify(assignment));
+  function handleSave() {
+    localStorage.setItem("biobridge_method_assignment", JSON.stringify(methods));
     localStorage.setItem("biobridge_model_assignment", JSON.stringify(modelAssignment));
     localStorage.setItem("biobridge_setup_complete", "true");
     onComplete();
@@ -223,23 +185,84 @@ function SetupMode({ onComplete }: { onComplete: () => void }) {
       if (k && k.startsWith("biobridge_")) toRemove.push(k);
     }
     toRemove.forEach((k) => localStorage.removeItem(k));
+    localStorage.removeItem("biobridge_grading_configs");
     window.location.reload();
   }
 
+  const selectClass = "w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition";
+
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4">
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">BioBridge — Setup</h1>
-          <p className="text-sm text-gray-500 mt-1">Method Assignment</p>
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center py-12 px-4">
+      <div className="w-full max-w-xl space-y-5">
+
+        {/* Header */}
+        <div className="text-center space-y-1">
+          <div className="inline-flex items-center gap-2 mb-2">
+            <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block" />
+            <span className="text-xs font-semibold text-indigo-600 uppercase tracking-widest">Internal Testing</span>
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">BioBridge Setup</h1>
+          <p className="text-sm text-gray-400">Assign a method and model to each question. Students will not see this.</p>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <MethodAssignment onSave={handleSave} />
+        {/* Question cards */}
+        <div className="space-y-3">
+          {QUESTIONS.map((q) => (
+            <div key={q.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+              {/* Question info */}
+              <div className="flex items-start justify-between">
+                <div>
+                  <span className="text-base font-bold text-gray-900">{q.id}</span>
+                  <span className="ml-2 text-xs text-indigo-500 font-mono bg-indigo-50 px-1.5 py-0.5 rounded">{q.standard}</span>
+                  <p className="text-xs text-gray-400 mt-0.5">{q.topic}</p>
+                </div>
+              </div>
+
+              {/* Selectors */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Method</label>
+                  <select
+                    value={methods[q.id] ?? 1}
+                    onChange={(e) => handleMethodChange(q.id, parseInt(e.target.value) as Method)}
+                    className={selectClass}
+                  >
+                    {([1, 2, 3] as Method[]).map((m) => (
+                      <option key={m} value={m}>{METHOD_LABELS[m]}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Model &amp; Temp</label>
+                  <select
+                    value={modelAssignment[q.id] ?? DEFAULT_GRADING_MODEL_IDS[methodKey(methods[q.id] ?? 1)]}
+                    onChange={(e) => setModelAssignment((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                    className={selectClass}
+                  >
+                    {STUDENT_GRADING_MODEL_OPTIONS[methodKey(methods[q.id] ?? 1)].map((model, index) => (
+                      <option key={model.id} value={model.id}>
+                        {index === 0 ? "Default: " : index === 1 ? "Backup: " : ""}
+                        {modelOptionLabel(model)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
 
+        {/* Save button */}
+        <button
+          onClick={handleSave}
+          className="w-full py-3 rounded-2xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 active:scale-[0.98] transition shadow-sm"
+        >
+          Save &amp; Start →
+        </button>
+
+        {/* Reset */}
         <div className="text-center">
-          <button onClick={handleReset} className="text-xs text-gray-400 hover:text-gray-600 transition">
+          <button onClick={handleReset} className="text-xs text-gray-300 hover:text-gray-500 transition">
             Reset setup
           </button>
         </div>
@@ -600,7 +623,8 @@ function QuestionPlayer({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = await res.json() as GradeResponse;
+      const data = await res.json() as GradeResponse & { error?: string };
+      if (!res.ok) throw new Error(data.error ?? `Server error ${res.status}`);
 
       const record: AttemptRecord = {
         attemptNumber,

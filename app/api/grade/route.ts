@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
       diagnosedGap = result.score >= part.maxScore ? "none" : result.feedback;
       tokenCount = result.tokenCount;
     } else {
-      const adaptationRules = method === "1"
+      const adaptationRules = methodId === "1"
         ? getAdaptationRules(question.standard, partLabel)
         : null;
       const kbContext = await retrieveFromKB(part.prompt, studentResponse, 2);
@@ -190,6 +190,7 @@ export async function POST(req: NextRequest) {
     console.error("[/api/grade] Error:", err);
     const openAiResponse = openAiErrorResponse(err);
     if (openAiResponse) return openAiResponse;
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    const message = err instanceof Error ? err.message : "Internal server error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -1,4 +1,6 @@
 import { chatComplete } from "@/lib/llm";
+import { callCompareLlm } from "@/lib/compare/llm";
+import { GradingModelConfig } from "@/lib/grading-models";
 
 export async function resolveGap(
   diagnosedGap: string,
@@ -34,7 +36,6 @@ export interface Method1Options {
   kbContext: { kd1: string; kd2: string; ke: string } | null;
   priorGaps: Record<string, string>;
   taskType: string | undefined;
-  temperature: number | undefined;
   part: { prompt: string; maxScore: number; scoringGuidance: string };
   questionStem: string;
 }
@@ -50,10 +51,10 @@ export async function gradeWithMethod1(
   _questionId: string,
   partLabel: "A" | "B" | "C",
   studentResponse: string,
-  model: string,
+  model: GradingModelConfig,
   options: Method1Options
 ): Promise<Method1Result> {
-  const { adaptationRules, kbContext, priorGaps, taskType, temperature, part, questionStem } = options;
+  const { adaptationRules, kbContext, priorGaps, taskType, part, questionStem } = options;
 
   const useGradeOpt = !!adaptationRules;
   const useKB = kbContext !== null;
@@ -239,9 +240,10 @@ export async function gradeWithMethod1(
     `STUDENT RESPONSE:\n${studentResponse.trim()}`,
   ].filter(Boolean);
 
-  const scoreCompletion = await chatComplete({
-    model,
-    temperature,
+  const scoreCompletion = await callCompareLlm({
+    provider: model.provider,
+    modelId: model.modelId,
+    temperature: model.temperature,
     jsonMode: true,
     messages: [
       { role: "system", content: scoringSystemPrompt },
@@ -249,7 +251,7 @@ export async function gradeWithMethod1(
     ],
   });
 
-  const scoreRaw = scoreCompletion.content ?? "{}";
+  const scoreRaw = scoreCompletion.text || "{}";
   const scoreParsed = JSON.parse(scoreRaw) as {
     reasoning?: string;
     score?: unknown;
@@ -288,6 +290,6 @@ export async function gradeWithMethod1(
     score,
     feedback,
     diagnosedGap,
-    tokenCount: scoreCompletion.tokenCount,
+    tokenCount: scoreCompletion.totalTokens,
   };
 }
