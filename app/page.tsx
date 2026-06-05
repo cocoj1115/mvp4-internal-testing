@@ -13,14 +13,16 @@ import type { GradeResponse } from "@/app/api/grade/route";
 
 interface GradingConfig {
   model: string;
-  temperature: number | undefined;
+  temperature: number;
 }
 
 const GRADING_CONFIGS: Array<GradingConfig & { id: string; label: string }> = [
   { id: "claude-sonnet-4-6:t0",        model: "claude-sonnet-4-6",      temperature: 0,         label: "Claude Sonnet 4.6 — temp 0" },
   { id: "claude-sonnet-4-6:t0.5",      model: "claude-sonnet-4-6",      temperature: 0.5,       label: "Claude Sonnet 4.6 — temp 0.5" },
   { id: "claude-sonnet-4-6:t1",        model: "claude-sonnet-4-6",      temperature: 1,         label: "Claude Sonnet 4.6 — temp 1" },
-  { id: "claude-opus-4-8:default",     model: "claude-opus-4-8",        temperature: undefined, label: "Claude Opus 4.8 — provider default" },
+  { id: "claude-opus-4-8:t0",          model: "claude-opus-4-8",        temperature: 0,         label: "Claude Opus 4.8 — temp 0" },
+  { id: "claude-opus-4-8:t0.5",       model: "claude-opus-4-8",        temperature: 0.5,       label: "Claude Opus 4.8 — temp 0.5" },
+  { id: "claude-opus-4-8:t1",         model: "claude-opus-4-8",        temperature: 1,         label: "Claude Opus 4.8 — temp 1" },
   { id: "gpt-5.4:t0",                  model: "gpt-5.4",                temperature: 0,         label: "GPT-5.4 — temp 0" },
   { id: "gpt-5.4:t0.5",               model: "gpt-5.4",                temperature: 0.5,       label: "GPT-5.4 — temp 0.5" },
   { id: "gpt-5.4:t1",                  model: "gpt-5.4",                temperature: 1,         label: "GPT-5.4 — temp 1" },
@@ -43,7 +45,7 @@ function readGradingConfig(questionId: string): GradingConfig {
     if (stored) {
       const parsed = JSON.parse(stored) as Record<string, { model?: string; temperature?: number }>;
       const cfg = parsed[questionId];
-      if (cfg?.model) return { model: cfg.model, temperature: cfg.temperature };
+      if (cfg?.model) return { model: cfg.model, temperature: cfg.temperature ?? 0 };
     }
   } catch { /* ignore */ }
   return { model: "gpt-5.4", temperature: 0 };
