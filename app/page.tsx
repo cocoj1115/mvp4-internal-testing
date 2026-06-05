@@ -193,7 +193,7 @@ function SetupMode({ onComplete }: { onComplete: () => void }) {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center py-12 px-4">
-      <div className="w-full max-w-xl space-y-5">
+      <div className="w-full max-w-[44rem] space-y-5">
 
         {/* Header */}
         <div className="text-center space-y-1">
@@ -219,7 +219,7 @@ function SetupMode({ onComplete }: { onComplete: () => void }) {
               </div>
 
               {/* Selectors */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(260px,1fr)_minmax(340px,1.2fr)]">
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Method</label>
                   <select
