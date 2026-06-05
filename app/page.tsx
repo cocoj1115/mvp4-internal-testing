@@ -141,11 +141,23 @@ const METHOD_LABELS: Record<Method, string> = {
   3: "Method 3 — Feedback-First",
 };
 
+const STUDENT_METHOD_PRESETS: Array<{
+  id: string;
+  label: string;
+  methods: Record<string, Method>;
+}> = [
+  { id: "student-1", label: "Student 1", methods: { M1Q14: 1, M1Q15: 2, M2Q14: 3, M2Q15: 1 } },
+  { id: "student-2", label: "Student 2", methods: { M1Q14: 2, M1Q15: 3, M2Q14: 1, M2Q15: 2 } },
+  { id: "student-3", label: "Student 3", methods: { M1Q14: 3, M1Q15: 1, M2Q14: 2, M2Q15: 3 } },
+  { id: "student-4", label: "Student 4", methods: { M1Q14: 1, M1Q15: 2, M2Q14: 3, M2Q15: 1 } },
+];
+
 function SetupMode({ onComplete }: { onComplete: () => void }) {
   const defaultMethods = Object.fromEntries(QUESTIONS.map((q) => [q.id, 1 as Method]));
   const defaultModelAssignment = Object.fromEntries(
     QUESTIONS.map((q) => [q.id, DEFAULT_GRADING_MODEL_IDS["1"]])
   );
+  const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
 
   const [methods, setMethods] = useState<Record<string, Method>>(() => {
     try {
@@ -164,11 +176,28 @@ function SetupMode({ onComplete }: { onComplete: () => void }) {
   });
 
   function handleMethodChange(questionId: string, method: Method) {
+    setSelectedPreset(null);
     setMethods((prev) => ({ ...prev, [questionId]: method }));
     setModelAssignment((prev) => ({
       ...prev,
       [questionId]: DEFAULT_GRADING_MODEL_IDS[methodKey(method)],
     }));
+  }
+
+  function modelAssignmentForMethods(assignment: Record<string, Method>): ModelAssignment {
+    return Object.fromEntries(
+      QUESTIONS.map((q) => [
+        q.id,
+        DEFAULT_GRADING_MODEL_IDS[methodKey(assignment[q.id] ?? 1)],
+      ])
+    );
+  }
+
+  function handlePresetSelect(preset: (typeof STUDENT_METHOD_PRESETS)[number]) {
+    const nextMethods = { ...defaultMethods, ...preset.methods };
+    setSelectedPreset(preset.id);
+    setMethods(nextMethods);
+    setModelAssignment(modelAssignmentForMethods(nextMethods));
   }
 
   function handleSave() {
@@ -205,6 +234,29 @@ function SetupMode({ onComplete }: { onComplete: () => void }) {
           <p className="text-sm text-gray-400">Assign a method and model to each question. Students will not see this.</p>
         </div>
 
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Student</p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {STUDENT_METHOD_PRESETS.map((preset) => {
+              const active = selectedPreset === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => handlePresetSelect(preset)}
+                  className={`h-10 rounded-lg border px-3 text-sm font-medium transition ${
+                    active
+                      ? "border-indigo-600 bg-indigo-600 text-white"
+                      : "border-gray-200 bg-white text-gray-700 hover:border-indigo-200 hover:bg-indigo-50"
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Question cards */}
         <div className="space-y-3">
           {QUESTIONS.map((q) => (
@@ -236,7 +288,10 @@ function SetupMode({ onComplete }: { onComplete: () => void }) {
                   <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Model &amp; Temp</label>
                   <select
                     value={modelAssignment[q.id] ?? DEFAULT_GRADING_MODEL_IDS[methodKey(methods[q.id] ?? 1)]}
-                    onChange={(e) => setModelAssignment((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                    onChange={(e) => {
+                      setSelectedPreset(null);
+                      setModelAssignment((prev) => ({ ...prev, [q.id]: e.target.value }));
+                    }}
                     className={selectClass}
                   >
                     {STUDENT_GRADING_MODEL_OPTIONS[methodKey(methods[q.id] ?? 1)].map((model, index) => (
