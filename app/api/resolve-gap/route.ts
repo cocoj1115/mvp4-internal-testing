@@ -3,11 +3,11 @@ import { resolveGap } from "@/lib/methods/method1";
 
 export async function POST(req: NextRequest) {
   try {
-    const { diagnosedGap, attempt2Response } = await req.json();
+    const { diagnosedGap, attempt2Response, model } = await req.json();
     if (!diagnosedGap || !attempt2Response) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
-    const gapResolution = await resolveGap(diagnosedGap, attempt2Response);
+    const gapResolution = await resolveGap(diagnosedGap, attempt2Response, model ?? "gpt-4o");
     return NextResponse.json({ gapResolution });
   } catch (err) {
     console.error("[/api/resolve-gap] Error:", err);

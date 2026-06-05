@@ -80,7 +80,10 @@ export async function gradeWithMethod1(
     ...receiveItems,
     "",
     "Scoring rules:",
-    "• CRITICAL: A response phrased as a question (e.g. 'DNA?', 'the ribosome?') scores 0 regardless of content — uncertainty is not understanding. A response must be a complete declarative sentence to earn any credit.",
+    "• CRITICAL: A response phrased as a question (e.g. 'DNA?', 'the ribosome?') scores 0 regardless of content — uncertainty is not understanding.",
+    taskType === "recall_identify"
+      ? "• For recall_identify tasks: a single correct term or phrase (e.g. 'DNA', 'mRNA') earns full credit — a complete sentence is not required."
+      : "• For this task type, a response must be a complete declarative sentence to earn any credit — a single word or phrase is insufficient.",
     isMultiPoint
       ? `• This part is worth ${part.maxScore} points. Award 0, 1, or ${part.maxScore} based on distinct scorable elements.`
       : "• This part is worth 1 point. Award 0 or 1.",
