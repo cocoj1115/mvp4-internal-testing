@@ -65,7 +65,6 @@ Feedback after an incorrect response must guide without revealing.
 Four dimensions, split by task type where relevant:
 
 **B1. task_focus**
-**B1. task_focus**
 Does the feedback avoid evaluating the student as a person rather than the task?
 
 | Score | Description |
