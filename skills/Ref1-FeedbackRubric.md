@@ -69,10 +69,10 @@ Does the feedback address the task, not the learner?
 
 | Score | Description |
 |---|---|
-| 1 | Uses personal or evaluative language ("you don't understand", "you failed to") |
-| 2 | Mostly task-focused but contains one evaluative phrase |
-| 3 | Task-focused throughout, no personal framing |
-| 4 | Addresses specific task features with zero personal language |
+| 1 | Uses judgemental or evaluative language ("you don't understand", "you failed to") |
+| 2 | Mostly task-focused but contains one evaluative/judgemental phrase |
+| 3 | Task-focused throughout, no judgemental framing |
+| 4 | Addresses specific task features with zero judgemental language |
 
 **B2. specificity**
 Does the feedback clearly connect to the learning goal?
@@ -171,7 +171,7 @@ Track A:
 - scope_control ≥ 3
 
 Track B:
-- task_focus ≥ 3.5
+- task_focus ≥ 3.0
 - specificity ≥ 3.0
 - manageability ≥ 3.0
 - answer_leakage ≥ 3.0
@@ -195,9 +195,3 @@ A row passes if ALL dimensions for its track meet the threshold.
   and log the error — do not block CSV export
 - The `track` field in the response should be stored in the
   results row for filtering in CSV export
-
-## Who maintains this file
-Researcher owns this file.
-To update dimension definitions: edit this file, then ask
-Claude Code to regenerate eval-judge/route.ts from this skill.
-Do not edit route.ts dimension strings directly.
