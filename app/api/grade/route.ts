@@ -133,11 +133,12 @@ export async function POST(req: NextRequest) {
         : null;
       const kbContext = await retrieveFromKB(part.prompt, studentResponse, 2);
 
-      const result = await gradeWithMethod1(questionId, partLabel, studentResponse, gradingModel, {
+      const result = await gradeWithMethod1(questionId, partLabel, studentResponse, gradingModel.modelId, {
         adaptationRules,
         kbContext,
         priorGaps: priorGaps ?? {},
         taskType,
+        temperature: gradingModel.temperature,
         part: { prompt: part.prompt, maxScore: part.maxScore, scoringGuidance: part.scoringGuidance },
         questionStem: question.stem,
       });
