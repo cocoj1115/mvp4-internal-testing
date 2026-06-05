@@ -204,6 +204,11 @@ function SetupMode({ onComplete }: { onComplete: () => void }) {
     localStorage.setItem("biobridge_method_assignment", JSON.stringify(methods));
     localStorage.setItem("biobridge_model_assignment", JSON.stringify(modelAssignment));
     localStorage.setItem("biobridge_setup_complete", "true");
+    if (selectedPreset) {
+      localStorage.setItem("biobridge_selected_student", selectedPreset);
+    } else {
+      localStorage.removeItem("biobridge_selected_student");
+    }
     onComplete();
   }
 
@@ -215,6 +220,7 @@ function SetupMode({ onComplete }: { onComplete: () => void }) {
     }
     toRemove.forEach((k) => localStorage.removeItem(k));
     localStorage.removeItem("biobridge_grading_configs");
+    localStorage.removeItem("biobridge_selected_student");
     window.location.reload();
   }
 
@@ -611,6 +617,7 @@ function QuestionPlayer({
   modelConfig,
   questionIndex,
   totalQuestions,
+  selectedStudent,
   onNextQuestion,
 }: {
   question: Question;
@@ -618,6 +625,7 @@ function QuestionPlayer({
   modelConfig: GradingModelConfig;
   questionIndex: number;
   totalQuestions: number;
+  selectedStudent: string | null;
   onNextQuestion: () => void;
 }) {
   const [session, setSession] = useState<SessionState>(() => {
@@ -737,10 +745,14 @@ function QuestionPlayer({
       {/* Left column — sticky question context */}
       <div className="w-full md:w-2/5 md:shrink-0 md:sticky md:top-0 md:h-screen md:overflow-y-auto bg-gray-100 border-b border-gray-200 md:border-b-0 md:border-r md:border-gray-200 p-6">
         <div className="space-y-3">
-          <div>
-            <p className="text-xs font-bold text-indigo-600 uppercase tracking-widest">{question.id}</p>
-            <h2 className="text-base font-bold text-gray-900 leading-snug mt-0.5">{question.topic}</h2>
-          </div>
+          {selectedStudent && (
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-indigo-100 px-3 py-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+              <span className="text-xs font-semibold text-indigo-700">
+                {STUDENT_METHOD_PRESETS.find((p) => p.id === selectedStudent)?.label ?? selectedStudent}
+              </span>
+            </div>
+          )}
           <QuestionContext question={question} />
         </div>
       </div>
@@ -834,6 +846,8 @@ function StudentMode() {
     } catch { return {} as ModelAssignment; }
   })();
 
+  const selectedStudent = localStorage.getItem("biobridge_selected_student");
+
   function handleNextQuestion() {
     const nextIndex = currentIndex + 1;
     setCurrentIndex(nextIndex);
@@ -865,6 +879,7 @@ function StudentMode() {
       modelConfig={modelConfig}
       questionIndex={currentIndex + 1}
       totalQuestions={QUESTION_SEQUENCE.length}
+      selectedStudent={selectedStudent}
       onNextQuestion={handleNextQuestion}
     />
   );
