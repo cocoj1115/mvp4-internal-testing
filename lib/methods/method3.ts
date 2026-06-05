@@ -8,11 +8,8 @@
  * forces this order: error analysis -> feedback -> score.
  */
 
-import OpenAI from "openai";
 import { PartLabel, QUESTION_MAP } from "@/app/lib/questions";
-import { GradingModel } from "@/lib/grading-models";
-
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+import { chatComplete } from "@/lib/llm";
 
 type Confidence = "high" | "medium" | "low";
 
@@ -271,7 +268,8 @@ export async function gradeWithMethod3(
   questionId: string,
   partLabel: PartLabel,
   studentResponse: string,
-  model: GradingModel
+  model: string,
+  temperature?: number
 ): Promise<Method3Result> {
   const question = QUESTION_MAP[questionId];
   if (!question) throw new Error(`Unknown questionId: ${questionId}`);
@@ -334,17 +332,17 @@ export async function gradeWithMethod3(
     `Student response:\n${studentResponse.trim() || "(no response)"}`,
   ].join("\n");
 
-  const completion = await client.chat.completions.create({
+  const completion = await chatComplete({
     model,
-    temperature: 0,
-    response_format: { type: "json_object" },
+    temperature,
+    jsonMode: true,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
   });
 
-  const raw = completion.choices[0].message.content ?? "{}";
+  const raw = completion.content ?? "{}";
   const parsed = JSON.parse(raw) as Method3RawResponse;
   const score = normalizeScore(parsed.score, part.maxScore);
   const feedback = normalizeMethod3Feedback(parsed, score, part.maxScore);
@@ -363,7 +361,7 @@ export async function gradeWithMethod3(
     score,
     feedback,
     confidence: normalizeConfidence(parsed.confidence),
-    tokenCount: completion.usage?.total_tokens ?? 0,
+    tokenCount: completion.tokenCount,
     latencyMs: Date.now() - t0,
   };
 }

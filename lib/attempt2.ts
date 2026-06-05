@@ -1,15 +1,14 @@
-import OpenAI from "openai";
-
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+import { chatComplete } from "@/lib/llm";
 
 export async function classifyResolution(
   attempt1Gap: string,
   attempt2Response: string,
-  model: string
+  model: string,
+  temperature?: number
 ): Promise<"fully" | "partially" | "not_at_all"> {
-  const res = await client.chat.completions.create({
+  const res = await chatComplete({
     model,
-    temperature: 0,
+    temperature,
     messages: [
       {
         role: "system",
@@ -22,7 +21,7 @@ export async function classifyResolution(
       },
     ],
   });
-  const raw = res.choices[0].message.content?.trim().toLowerCase() ?? "";
+  const raw = res.content.trim().toLowerCase();
   if (raw.startsWith("not") || raw.includes("not_at_all") || raw.includes("not at all"))
     return "not_at_all";
   if (raw.startsWith("partial") || raw.includes("partial")) return "partially";
@@ -38,6 +37,7 @@ export interface Attempt2Options {
   partPrompt: string;
   studentResponse: string;
   model: string;
+  temperature?: number;
 }
 
 export async function handleAttempt2(
@@ -52,6 +52,7 @@ export async function handleAttempt2(
     partPrompt,
     studentResponse,
     model,
+    temperature,
   } = options;
 
   const feedbackInstruction =
@@ -95,9 +96,9 @@ export async function handleAttempt2(
     `Student attempt 2 response: ${studentResponse}`,
   ].join("\n");
 
-  const feedbackCompletion = await client.chat.completions.create({
+  const feedbackCompletion = await chatComplete({
     model,
-    temperature: 0,
+    temperature,
     messages: [
       { role: "system", content: feedbackSystemPrompt },
       { role: "user", content: feedbackUserPrompt },
@@ -105,7 +106,7 @@ export async function handleAttempt2(
   });
 
   return {
-    feedback: feedbackCompletion.choices[0].message.content?.trim() ?? "No feedback returned.",
-    tokenCount: feedbackCompletion.usage?.total_tokens ?? 0,
+    feedback: feedbackCompletion.content.trim() || "No feedback returned.",
+    tokenCount: feedbackCompletion.tokenCount,
   };
 }

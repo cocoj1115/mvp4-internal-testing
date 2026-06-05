@@ -65,41 +65,42 @@ Feedback after an incorrect response must guide without revealing.
 Four dimensions, split by task type where relevant:
 
 **B1. task_focus**
-Does the feedback address the task, not the learner?
+**B1. task_focus**
+Does the feedback avoid evaluating the student as a person rather than the task?
 
 | Score | Description |
 |---|---|
-| 1 | Uses judgemental or evaluative language ("you don't understand", "you failed to") |
-| 2 | Mostly task-focused but contains one evaluative/judgemental phrase |
-| 3 | Task-focused throughout, no judgemental framing |
-| 4 | Addresses specific task features with zero judgemental language |
+| 1 | Explicitly judges the student as a person or their ability (e.g., "you don't understand", "you failed to", "you clearly didn't think") |
+| 2 | Contains one phrase that could be read as judging the student rather than the task (e.g., "you should know this", "you missed the point") |
+| 3 | No personal judgement, but feedback is generic — addresses the task without referencing what the student actually wrote |
+| 4 | No personal judgement, and feedback directly references the student's response to redirect ("you identified X, but the question asks about Y") |
 
 **B2. specificity**
 Does the feedback clearly connect to the learning goal?
 
 | Score | Task Type | Description |
 |---|---|---|
-| 1 | Both | Generic — applies to any question ("try again", "think harder") |
-| 2 | Recall/Identify | References the topic but not the specific concept being asked |
-| 2 | Explain Mechanism | Names a general concept but not the specific gap |
-| 3 | Recall/Identify | Names the specific concept or category the student should identify |
-| 3 | Explain Mechanism | Names the missing step but without clear connection to student's response |
-| 4 | Recall/Identify | Names the specific concept AND links it to the student's misconception |
-| 4 | Explain Mechanism | Names the exact missing causal step, linked clearly to student's response |
+| 1 | Both | Generic — could apply to any biology question ("try again", "think harder", "be more specific") |
+| 2 | Recall/Identify | References the biological topic but not the specific concept being asked (e.g. "think about DNA" when the answer is mRNA) |
+| 2 | Explain Mechanism | Names a general concept but not the specific causal step that is missing |
+| 3 | Recall/Identify | Names the specific concept or category the student should identify, without referencing what the student wrote |
+| 3 | Explain Mechanism | Names the specific missing causal step, without referencing what the student wrote |
+| 4 | Recall/Identify | Names the specific concept AND explicitly connects it to what the student wrote (e.g. "ribosomes build proteins, but what carries the instructions?") |
+| 4 | Explain Mechanism | Names the exact missing causal step AND explicitly connects it to the outcome the student described |
 
 **B3. manageability**
 Is the amount of information appropriate?
 
 | Score | Task Type | Description |
 |---|---|---|
-| 1 | Recall/Identify | Explains the entire concept — a mini-lesson when one hint would suffice |
-| 1 | Explain Mechanism | Addresses multiple gaps or provides overwhelming information |
-| 2 | Recall/Identify | Two pieces of information when one would suffice |
-| 2 | Explain Mechanism | Addresses two issues; one is primary |
-| 3 | Recall/Identify | One focused hint, appropriate length |
-| 3 | Explain Mechanism | Focuses on one gap but includes one unnecessary add-on |
-| 4 | Recall/Identify | Minimal and targeted — exactly what is needed, nothing extra |
-| 4 | Explain Mechanism | One clear focused revision target, no extra information |
+| 1 | Recall/Identify | Explains the full concept or gives multiple hints when one would suffice |
+| 1 | Explain Mechanism | Addresses multiple gaps or asks for multiple causal steps at once |
+| 2 | Recall/Identify | One hint plus one extra piece of information that is not needed |
+| 2 | Explain Mechanism | Focuses on one gap but also introduces a second issue or asks a follow-up |
+| 3 | Recall/Identify | One hint plus one brief context sentence that sets it up (acceptable) |
+| 3 | Explain Mechanism | One gap targeted but includes one unnecessary phrase or qualifier |
+| 4 | Recall/Identify | Exactly one targeted hint, nothing else |
+| 4 | Explain Mechanism | Exactly one causal step targeted, no add-ons, no extra context |
 
 **B4. answer_leakage**
 Does the feedback preserve productive struggle?

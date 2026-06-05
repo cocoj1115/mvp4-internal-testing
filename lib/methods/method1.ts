@@ -1,15 +1,14 @@
-import OpenAI from "openai";
-
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+import { chatComplete } from "@/lib/llm";
 
 export async function resolveGap(
   diagnosedGap: string,
   attempt2Response: string,
-  model: string
+  model: string,
+  temperature?: number
 ): Promise<"fully" | "partially" | "not at all"> {
-  const completion = await client.chat.completions.create({
+  const result = await chatComplete({
     model,
-    temperature: 0,
+    temperature,
     messages: [
       {
         role: "system",
@@ -23,7 +22,7 @@ export async function resolveGap(
     ],
   });
 
-  const raw = completion.choices[0].message.content?.trim().toLowerCase() ?? "";
+  const raw = result.content.trim().toLowerCase();
   if (raw.includes("not at all")) return "not at all";
   if (raw.includes("partially")) return "partially";
   if (raw.includes("fully")) return "fully";
@@ -35,6 +34,7 @@ export interface Method1Options {
   kbContext: { kd1: string; kd2: string; ke: string } | null;
   priorGaps: Record<string, string>;
   taskType: string | undefined;
+  temperature: number | undefined;
   part: { prompt: string; maxScore: number; scoringGuidance: string };
   questionStem: string;
 }
@@ -53,7 +53,7 @@ export async function gradeWithMethod1(
   model: string,
   options: Method1Options
 ): Promise<Method1Result> {
-  const { adaptationRules, kbContext, priorGaps, taskType, part, questionStem } = options;
+  const { adaptationRules, kbContext, priorGaps, taskType, temperature, part, questionStem } = options;
 
   const useGradeOpt = !!adaptationRules;
   const useKB = kbContext !== null;
@@ -79,7 +79,8 @@ export async function gradeWithMethod1(
     "You will receive:",
     ...receiveItems,
     "",
-    "Scoring rules:",
+    // ── scoring rules ─────────────────────────────────────────────────────────
+    "SCORING RULES:",
     "• CRITICAL: A response phrased as a question (e.g. 'DNA?', 'the ribosome?') scores 0 regardless of content — uncertainty is not understanding.",
     taskType === "recall_identify"
       ? "• For recall_identify tasks: a single correct term or phrase (e.g. 'DNA', 'mRNA') earns full credit — a complete sentence is not required."
@@ -96,15 +97,17 @@ export async function gradeWithMethod1(
       ? "• Prior part gaps are provided for context only. Use them to make feedback more coherent across parts, but do not change the score based on prior gaps. Score only what this sub-part asks."
       : null,
     "",
-    "FEEDBACK STYLE (apply to every feedback response):",
+    // ── feedback style ────────────────────────────────────────────────────────
+    "FEEDBACK STYLE:",
     "- Tone: warm and encouraging, like a supportive biology teacher — not cold, not overly casual.",
     "- Maximum 35 words total.",
     "- Keep sentences short and direct. Do NOT use complex relative clauses or multi-clause sentences.",
     "- Academic terminology is allowed when it is standard textbook vocabulary (e.g. 'amino acid', 'folding', 'allele'). Do not avoid it — just keep the sentence structure simple around it.",
-    "- For score=0: acknowledge what the student got partially right before redirecting. Use 'but' to pivot. Example: 'Ribosomes do help build proteins, but they follow instructions — what molecule actually carries those instructions?'",
-    "- For score=1: be specific and genuinely affirming. Vary the opening — do NOT always use 'Correct'. Rotate through: 'Exactly right.' / 'Nice work.' / 'Good job.' / 'Yes!' / 'That's right.' / 'Well done.' — use a period or exclamation mark, never a dash. Match the warmth to the effort.",
+    "- For score=0: acknowledge what the student got partially right before redirecting. Use 'but' to pivot.",
+    "- For score=1: be specific and genuinely affirming. Vary the opening — rotate through: 'Exactly right.' / 'Nice work.' / 'Good job.' / 'Yes!' / 'That's right.' / 'Well done.' — use a period or exclamation mark, never a dash.",
     "- Never start with 'I', 'The missing step', 'Your response', or 'This response'.",
     "",
+    // ── student state ─────────────────────────────────────────────────────────
     "STUDENT STATE CLASSIFICATION (classify before writing feedback):",
     "- blank: response is empty, 'I don't know', a single uncontextualized word, or shows no biological reasoning",
     "- wrong_concept: response names a specific wrong substance, process, or organism (e.g. ribosome instead of DNA)",
@@ -113,78 +116,91 @@ export async function gradeWithMethod1(
     "- partial_credit: multi-point part where student addressed only some of the required elements",
     "- correct: response earns full credit for this part",
     "",
+    // ── feedback planning ─────────────────────────────────────────────────────
+    "FEEDBACK PLANNING (do this before writing feedback):",
+    "Step 1 — identify specificityTarget: the single most important concept, category, location, or causal step the student needs next. Take it from diagnosedGap. Phrase it as a hint category, not the answer itself.",
+    "Step 2 — identify studentAnchor: the most relevant phrase the student actually wrote that you can connect the hint to. If the student wrote nothing useful, studentAnchor is null.",
+    "Step 3 — write feedback using specificityTarget and studentAnchor only. Do not introduce any other biological content.",
+    "Step 4 — manageability check: feedback must contain exactly one hint (specificityTarget). Delete any clause that is not needed to guide the student toward specificityTarget. No mini-lessons, no second gaps, no extra causes or consequences.",
+    "Step 5 — specificity check: the feedback must name specificityTarget explicitly in student-facing language. Replace any generic redirect ('think about the process', 'be more specific', 'what happens next') with the actual target.",
+    "",
+    // ── scaffolding rules ─────────────────────────────────────────────────────
     "SCAFFOLDING FEEDBACK RULES by taskType and studentState:",
     "",
     `The taskType for this part is: ${taskType ?? "recall_identify"}`,
     "",
-    // ── correct ──────────────────────────────────────────────────────────────
+    // correct
     "IF studentState = correct:",
     "  Write exactly 1 declarative sentence.",
     "  Start with one of: 'Exactly right.' / 'Nice work.' / 'Good job.' / 'Yes!' / 'That's right.' / 'Well done.' — use a period or exclamation mark, never a dash.",
     "  Name the specific concept correctly identified.",
     "  No questions, no 'but', no 'however', no critique.",
     "",
-    // ── blank ─────────────────────────────────────────────────────────────────
+    // blank
     "IF studentState = blank:",
-    "  Do not ask about the gap directly.",
-    "  recall_identify:        'Think about what you know about [biological domain]. What [molecule / structure / process] is responsible for [the function this part asks about]?'",
-    "  explain_mechanism:      'Think about what you know about [biological process]. What happens step by step when [trigger or condition] occurs?'",
-    "  evaluation_justification: 'Think about what [biological structure / process] does for the cell or organism. What would be lost or impossible without it?'",
-    "  experimental_design:    'Think about how a scientist would know whether [variable] changed. What could they observe or measure?'",
-    "  synthesis_design:       'Think about what outcome is being targeted. What is the first step that controls [the relevant biological variable]?'",
-    "  1-2 sentences max.",
+    "  Sentence 1: name the two biological components involved in specificityTarget — this gives the student something concrete to hold onto. Do not reveal the answer.",
+    "  Sentence 2: ask what happens between those two components, pointing toward specificityTarget.",
+    "  recall_identify:          'Think about [biological domain of this part]. What [molecule / structure / process] is responsible for [specificityTarget function]?'",
+    "  explain_mechanism:        'Think about what [component A] and [component B] do when [biological process occurs]. What kind of [interaction / change] between them determines [specificityTarget outcome]?'",
+    "  evaluation_justification: 'Think about what [biological structure / process] does for the cell. What would be lost without [specificityTarget]?'",
+    "  experimental_design:      'Think about how a scientist would detect change. What one measurement would show whether [specificityTarget] changed?'",
+    "  synthesis_design:         'Think about the target outcome. What first step controls [specificityTarget]?'",
+    "  Maximum 2 sentences.",
     "",
-    // ── wrong_concept ─────────────────────────────────────────────────────────
+    // wrong_concept
     "IF studentState = wrong_concept:",
-    "  First sentence: declarative — acknowledge that the student's answer has a real role in biology, but clarify it applies to a different function or context. This must NOT be a question.",
-    "  Second sentence: one redirecting question that names the biological location or context where the correct answer lives.",
-    "  Template: '[Student's answer] is involved in [different function], not [what this part asks about]. What [molecule / structure / process] in [relevant biological location or context] is responsible for [function being asked]?'",
-    "  Maximum 2 sentences. Exactly one question mark total.",
+    "  Sentence 1: declarative — use studentAnchor to acknowledge the student's answer has a biological role, but name the different function it serves. Do NOT use a question mark.",
+    "  Sentence 2: one question pointing to specificityTarget only. Name the biological location or context where the correct answer lives.",
+    "  Template: '[studentAnchor] is involved in [its actual biological role], not [function this part asks about]. What [molecule / structure / process] in [biological context] is responsible for [specificityTarget]?'",
+    "  Maximum 2 sentences. Exactly one question mark.",
     "",
-    // ── missing_mechanism ─────────────────────────────────────────────────────
+    // missing_mechanism
     "IF studentState = missing_mechanism:",
-    "  recall_identify: treat as missing_specificity — student has the right domain but needs the specific term.",
-    "    'You are thinking about the right area. Can you name the specific [molecule / structure] rather than describing what it does?'",
+    "  recall_identify:",
+    "    Treat as missing_specificity. Student has the right domain but needs the specific term.",
+    "    'You are describing [studentAnchor general idea], but this part asks for the specific [molecule / structure]. What is [specificityTarget]?'",
     "",
     "  explain_mechanism:",
-    "    The student identified an outcome but not the causal chain.",
-    "    Sentence 1: acknowledge what the student correctly described.",
-    "    Sentence 2: provide a causal scaffold — name the two components involved and ask what happens between them. Do NOT reveal the specific term. Do NOT ask an open-ended 'why' or 'what causes everything' question.",
-    "    Template: 'You're right that [outcome they described]. Think about what happens between [component A] and [component B] — what kind of [interaction / change / signal] causes that?'",
-    "    Exactly 2 sentences. Second sentence is the only question.",
+    "    Sentence 1: use studentAnchor to acknowledge what the student correctly described.",
+    "    Sentence 2: ask for the single missing causal link (specificityTarget) only — do not ask for the full sequence.",
+    "    Template: 'You're right that [studentAnchor outcome]. What single [interaction / change / signal] between [component A] and [component B] causes [specificityTarget]?'",
+    "    Exactly 2 sentences. One question mark in sentence 2 only.",
     "",
-    "  evaluation_justification: 'You have made a claim. What specific biological consequence or function directly supports that claim?'",
+    "  evaluation_justification: 'You have described [studentAnchor]. What one biological consequence directly supports that [specificityTarget]?'",
     "",
-    "  experimental_design: 'You have the right variable in mind. How would a researcher actually observe or measure whether [X] changed?'",
+    "  experimental_design: 'You have the right variable. What one measurement would show whether [specificityTarget] changed?'",
     "",
-    "  synthesis_design: 'Good start. What is the specific next step in the sequence, and why does that step control [the relevant biological outcome]?'",
+    "  synthesis_design: 'Good start with [studentAnchor]. What specific next step controls [specificityTarget]?'",
     "",
-    // ── missing_specificity ───────────────────────────────────────────────────
+    // missing_specificity
     "IF studentState = missing_specificity:",
-    "  recall_identify:          'You are thinking about the right area. Can you name the specific [molecule / structure / process] rather than describing its general role?'",
-    "  explain_mechanism:        'You have described the outcome. What is the specific [physical / chemical] interaction between [relevant components] that produces it?'",
-    "  evaluation_justification: 'You have the right idea. What specific function or consequence would be lost without [the thing they mentioned]?'",
-    "  experimental_design:      'You have the right variable. What specific measurement or observation would show whether it changed?'",
-    "  synthesis_design:         'You have the goal. What specific [cross / mating / step] achieves it, and why does that work genetically?'",
+    "  recall_identify:          'You described [studentAnchor], but this part asks for the specific [molecule / structure / process]. What is [specificityTarget]?'",
+    "  explain_mechanism:        '[studentAnchor] is the outcome. What one [physical / chemical] interaction between [component A] and [component B] produces [specificityTarget]?'",
+    "  evaluation_justification: 'You have the right idea with [studentAnchor]. What one function would be lost without [specificityTarget]?'",
+    "  experimental_design:      'You have the right variable. What one measurement would show whether [specificityTarget] changed?'",
+    "  synthesis_design:         'You have the goal. What specific [cross / mating / step] achieves [specificityTarget]?'",
     "",
-    // ── partial_credit ────────────────────────────────────────────────────────
+    // partial_credit
     "IF studentState = partial_credit:",
     "  Only applies to multi-point parts (maxScore > 1) — currently only M2Q15-B.",
-    "  Acknowledge what was correct explicitly by naming it.",
-    "  Then: 'For the second measure, think about a completely different aspect of the system — not [what they already described], but something that captures [a different outcome or dimension].'",
+    "  Sentence 1: name what was correct using studentAnchor.",
+    "  Sentence 2: give one targeted hint for the missing element only — name specificityTarget directly.",
+    "  'Well done on [studentAnchor]. For the second measure, think about [specificityTarget] — a different dimension from what you already described.'",
     "  Do not repeat the same category of answer.",
     "",
-    // ── absolute constraints ──────────────────────────────────────────────────
+    // absolute constraints
     "ABSOLUTE CONSTRAINTS for all states except correct:",
-    "- Your entire feedback response must contain exactly ONE question mark total. Count before you finish. If you have written two questions, combine them into one or delete the second.",
+    "- Exactly ONE question mark total. Count before finishing.",
     "- Do not reveal the answer.",
     "- Do not say 'incorrect', 'wrong', 'you need to'.",
     "- Do not mention rubrics, scoring criteria, or other parts of the question.",
-    "- Do not ask more than one question per feedback.",
+    "- Exactly one hint (specificityTarget). No second gap, no mini-lesson, no extra cause or consequence.",
+    "- CRITICAL: Do NOT name the specificityTarget answer directly in feedback. specificityTarget tells you WHAT to hint at, not WHAT to say. For recall_identify blank: name the biological category or location, not the molecule itself. Example: for specificityTarget=DNA, say 'Think about what in the nucleus carries genetic instructions' — not 'What molecule is DNA?'",
     "- Maximum 2 sentences.",
     "",
-    "diagnosedGap: Identify the single most important reasoning step or concept the student failed to demonstrate.",
-    "Be specific to biology content — name the molecule, process, or mechanism that is missing or wrong.",
+    // json format
+    "diagnosedGap: the single most important reasoning step or concept the student failed to demonstrate.",
+    "Be specific — name the molecule, process, or mechanism that is missing or wrong.",
     "Format: '[Student believed/wrote X] but [correct concept] is required because [one-line biological reason].'",
     "Write 'none' if score equals maximum points.",
     "",
@@ -193,12 +209,13 @@ export async function gradeWithMethod1(
     '  "reasoning": "<2-4 sentences: what did the student write, what does the rubric require, where does the response succeed or fall short>",',
     '  "score": <integer>,',
     '  "studentState": "<one of: blank | wrong_concept | missing_mechanism | missing_specificity | partial_credit | correct>",',
-    '  "feedback": "<string — see scaffolding rules above>",',
+    '  "specificityTarget": "<the exact concept, category, location, or causal step the feedback targets — internal only>",',
+    '  "studentAnchor": "<the phrase from the student response used to connect the hint — null if blank>",',
+    '  "feedback": "<string>",',
     '  "diagnosedGap": "<string>"',
     '}',
     'Write "reasoning" FIRST before deciding score.',
-    'The reasoning field must be 2-4 sentences of explicit biological analysis before you commit to a score.',
-    'reasoning and studentState are internal only — never shown to the student.',
+    'reasoning, specificityTarget, and studentAnchor are internal only — never shown to the student.',
   ].filter((l) => l !== null).join("\n");
 
   const scoringUserParts = [
@@ -215,21 +232,23 @@ export async function gradeWithMethod1(
     `STUDENT RESPONSE:\n${studentResponse.trim()}`,
   ].filter(Boolean);
 
-  const scoreCompletion = await client.chat.completions.create({
+  const scoreCompletion = await chatComplete({
     model,
-    temperature: 0,
-    response_format: { type: "json_object" },
+    temperature,
+    jsonMode: true,
     messages: [
       { role: "system", content: scoringSystemPrompt },
       { role: "user", content: scoringUserParts.join("\n\n") },
     ],
   });
 
-  const scoreRaw = scoreCompletion.choices[0].message.content ?? "{}";
+  const scoreRaw = scoreCompletion.content ?? "{}";
   const scoreParsed = JSON.parse(scoreRaw) as {
     reasoning?: string;
     score?: unknown;
     studentState?: string;
+    specificityTarget?: string;
+    studentAnchor?: string;
     feedback?: string;
     diagnosedGap?: string;
   };
@@ -239,6 +258,12 @@ export async function gradeWithMethod1(
 
   const studentState = typeof scoreParsed.studentState === "string" ? scoreParsed.studentState : "unknown";
   console.log(`[method1] studentState: ${studentState}`);
+
+  const specificityTarget = typeof scoreParsed.specificityTarget === "string" ? scoreParsed.specificityTarget : "";
+  console.log(`[method1] specificityTarget: ${specificityTarget}`);
+
+  const studentAnchor = typeof scoreParsed.studentAnchor === "string" ? scoreParsed.studentAnchor : null;
+  console.log(`[method1] studentAnchor: ${studentAnchor}`);
 
   const rawScore = typeof scoreParsed.score === "number" ? scoreParsed.score : 0;
   const score = Math.max(0, Math.min(part.maxScore, Math.round(rawScore)));
@@ -256,6 +281,6 @@ export async function gradeWithMethod1(
     score,
     feedback,
     diagnosedGap,
-    tokenCount: scoreCompletion.usage?.total_tokens ?? 0,
+    tokenCount: scoreCompletion.tokenCount,
   };
 }

@@ -5,7 +5,7 @@
   "part_a": {
     "key_concept": "The student's eyes changed because the amount of light in the environment changed. The pupils (via the iris) adjust in response to light level changes to maintain vision — this is homeostasis.",
     "scoring_rubric": "Award 1 point if the response correctly states that the eyes changed because the amount of light in the environment changed. Award 0 points if the response describes the eyes adjusting without identifying light change as the cause, or if the response is too vague (e.g., 'eyes take time to adjust' without cause).",
-    "adaptation_rules": ""
+    "adaptation_rules": "- Rule: [Response describes pupils/eyes reacting or responding to the amount of light available, even without using causal language like 'because'] → [Award 1 point]\n  Example: \"The student's pupils are reacting to the amount of light that is available.\"\n  Rationale: 'Reacting to light' and 'changed because light changed' express the same causal relationship. Award 1 point as long as light is identified as the stimulus the eyes are responding to."
   },
   "part_b": {
     "key_concept": "The teacher dimmed the classroom to: (1) give students' eyes time to adjust/dilate to the dim environment (establish a baseline/setpoint), so that the response to bright light could be clearly observed. Both rationales earn credit: establishing baseline OR allowing eyes to adjust.",

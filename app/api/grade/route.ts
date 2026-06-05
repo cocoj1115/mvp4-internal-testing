@@ -7,11 +7,7 @@ import { gradeWithMethod1 } from "@/lib/methods/method1";
 import { gradeWithMethod2 } from "@/lib/methods/method2";
 import { gradeWithMethod3 } from "@/lib/methods/method3";
 import { classifyResolution, handleAttempt2 } from "@/lib/attempt2";
-import {
-  DEFAULT_GRADING_MODEL,
-  GradingModel,
-  isGradingModel,
-} from "@/lib/grading-models";
+import { DEFAULT_GRADING_MODEL } from "@/lib/grading-models";
 
 export interface GradeRequest {
   questionId: string;
@@ -19,6 +15,7 @@ export interface GradeRequest {
   studentResponse: string;
   method?: string;
   model?: string;
+  temperature?: number;
   attemptNumber?: 1 | 2;
   attempt1Feedback?: string;
   attempt1Gap?: string;
@@ -30,7 +27,7 @@ export interface GradeResponse {
   score: number;
   feedback: string;
   tokenCount?: number;
-  model?: GradingModel;
+  model?: string;
   diagnosedGap: string;
   resolution?: "fully" | "partially" | "not_at_all";
 }
@@ -72,6 +69,7 @@ export async function POST(req: NextRequest) {
       studentResponse,
       method,
       model,
+      temperature,
       attemptNumber = 1,
       attempt1Feedback,
       attempt1Gap,
@@ -79,10 +77,7 @@ export async function POST(req: NextRequest) {
       taskType,
     } = body;
 
-    const gradingModel = model ?? DEFAULT_GRADING_MODEL;
-    if (!isGradingModel(gradingModel)) {
-      return NextResponse.json({ error: `Unsupported grading model: ${String(gradingModel)}` }, { status: 400 });
-    }
+    const gradingModel = (typeof model === "string" && model.trim()) ? model.trim() : DEFAULT_GRADING_MODEL;
 
     const question = QUESTION_MAP[questionId];
     if (!question) return NextResponse.json({ error: "Unknown question ID" }, { status: 400 });
@@ -107,13 +102,13 @@ export async function POST(req: NextRequest) {
     let tokenCount: number;
 
     if (method === "2") {
-      const result = await gradeWithMethod2(questionId, partLabel, studentResponse, gradingModel);
+      const result = await gradeWithMethod2(questionId, partLabel, studentResponse, gradingModel, temperature);
       score = result.score;
       feedback = result.feedback;
       diagnosedGap = result.score >= part.maxScore ? "none" : result.feedback;
       tokenCount = result.tokenCount;
     } else if (method === "3") {
-      const result = await gradeWithMethod3(questionId, partLabel, studentResponse, gradingModel);
+      const result = await gradeWithMethod3(questionId, partLabel, studentResponse, gradingModel, temperature);
       score = result.score;
       feedback = result.feedback;
       diagnosedGap = result.score >= part.maxScore ? "none" : result.feedback;
@@ -129,6 +124,7 @@ export async function POST(req: NextRequest) {
         kbContext,
         priorGaps: priorGaps ?? {},
         taskType,
+        temperature,
         part: { prompt: part.prompt, maxScore: part.maxScore, scoringGuidance: part.scoringGuidance },
         questionStem: question.stem,
       });
@@ -153,7 +149,8 @@ export async function POST(req: NextRequest) {
     const resolution = await classifyResolution(
       attempt1Gap ?? diagnosedGap,
       studentResponse,
-      gradingModel
+      gradingModel,
+      temperature
     );
 
     const attempt2Result = await handleAttempt2({
@@ -165,6 +162,7 @@ export async function POST(req: NextRequest) {
       partPrompt: part.prompt,
       studentResponse,
       model: gradingModel,
+      temperature,
     });
 
     return NextResponse.json<GradeResponse>({
@@ -179,6 +177,7 @@ export async function POST(req: NextRequest) {
     console.error("[/api/grade] Error:", err);
     const openAiResponse = openAiErrorResponse(err);
     if (openAiResponse) return openAiResponse;
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    const message = err instanceof Error ? err.message : "Internal server error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

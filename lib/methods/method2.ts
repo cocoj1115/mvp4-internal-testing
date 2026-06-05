@@ -12,11 +12,8 @@
  * tokenCount and latencyMs span the combined duration of both calls.
  */
 
-import OpenAI from "openai";
+import { chatComplete } from "@/lib/llm";
 import { QUESTION_MAP, PartLabel } from "@/app/lib/questions";
-import { GradingModel } from "@/lib/grading-models";
-
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ── Internal stage types ──────────────────────────────────────────────────────
 
@@ -93,7 +90,8 @@ export async function gradeWithMethod2(
   questionId: string,
   partLabel: PartLabel,
   response: string,
-  model: GradingModel
+  model: string,
+  temperature?: number
 ): Promise<Method2Result> {
   const question = QUESTION_MAP[questionId];
   if (!question) throw new Error(`Unknown questionId: ${questionId}`);
@@ -175,19 +173,19 @@ export async function gradeWithMethod2(
     response.trim() || "(no response)",
   ].join("\n");
 
-  const stage1Completion = await client.chat.completions.create({
+  const stage1Completion = await chatComplete({
     model,
-    temperature: 0,
-    response_format: { type: "json_object" },
+    temperature,
+    jsonMode: true,
     messages: [
       { role: "system", content: stage1System },
       { role: "user", content: stage1User },
     ],
   });
 
-  totalTokens += stage1Completion.usage?.total_tokens ?? 0;
+  totalTokens += stage1Completion.tokenCount;
 
-  const stage1Raw = stage1Completion.choices[0].message.content ?? "{}";
+  const stage1Raw = stage1Completion.content ?? "{}";
   const stage1 = JSON.parse(stage1Raw) as Stage1Response;
 
   // ── Stage 2: Feedback ─────────────────────────────────────────────────────
@@ -262,19 +260,19 @@ export async function gradeWithMethod2(
     JSON.stringify(stage1, null, 2),
   ].join("\n");
 
-  const stage2Completion = await client.chat.completions.create({
+  const stage2Completion = await chatComplete({
     model,
-    temperature: 0,
-    response_format: { type: "json_object" },
+    temperature,
+    jsonMode: true,
     messages: [
       { role: "system", content: stage2System },
       { role: "user", content: stage2User },
     ],
   });
 
-  totalTokens += stage2Completion.usage?.total_tokens ?? 0;
+  totalTokens += stage2Completion.tokenCount;
 
-  const stage2Raw = stage2Completion.choices[0].message.content ?? "{}";
+  const stage2Raw = stage2Completion.content ?? "{}";
   const stage2 = JSON.parse(stage2Raw) as Stage2Response;
 
   const latencyMs = Date.now() - t0;

@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.100.1",
     "chromadb": "^3.4.3",
     "next": "14.2.35",
     "openai": "^6.39.0",
