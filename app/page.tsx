@@ -403,7 +403,9 @@ function PartPlayer({
           {lastAttempt.response}
         </p>
         {lastAttempt.feedback && (
-          <p className="mt-2 text-xs text-gray-400 leading-relaxed">{lastAttempt.feedback}</p>
+          <p className={`mt-2 text-xs leading-relaxed ${
+            lastAttempt.score >= part.maxScore ? "text-emerald-600" : "text-rose-600"
+          }`}>{lastAttempt.feedback}</p>
         )}
         {attempts.length >= 2 && (
           <div className="mt-2">
@@ -464,7 +466,7 @@ function PartPlayer({
         <p className="text-xs text-gray-400 italic">{part.prompt}</p>
         <p className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">{attempt1.response}</p>
         <p className="text-xs font-semibold text-gray-700">Score: {attempt1.score} / {part.maxScore}</p>
-        <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 leading-relaxed">
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 leading-relaxed">
           {attempt1.feedback}
         </div>
         <div className="flex justify-end">
@@ -484,7 +486,7 @@ function PartPlayer({
         <p className="text-xs text-gray-400 italic">{part.prompt}</p>
         <p className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">{attempt1.response}</p>
         <p className="text-xs font-semibold text-gray-700">Score: {attempt1.score} / {part.maxScore}</p>
-        <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 leading-relaxed">
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 leading-relaxed">
           {attempt1.feedback}
         </div>
         <div className="flex justify-end">
@@ -542,7 +544,11 @@ function PartPlayer({
         <p className="text-xs text-gray-400 italic">{part.prompt}</p>
         <p className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">{attempt2.response}</p>
         <p className="text-xs font-semibold text-gray-700">Score: {attempt2.score} / {part.maxScore}</p>
-        <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 leading-relaxed">
+        <div className={`rounded-lg border px-4 py-3 text-sm leading-relaxed ${
+          attempt2Passed
+            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+            : "border-rose-200 bg-rose-50 text-rose-800"
+        }`}>
           {attempt2.feedback}
         </div>
 
