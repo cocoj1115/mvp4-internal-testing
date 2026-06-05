@@ -175,139 +175,143 @@ export async function POST(req: NextRequest) {
 
       controller.enqueue(encoder.encode(jsonLine({ type: "start", runId, total })));
 
+      // Flatten all tasks upfront so we can process them with concurrency
+      interface TaskSpec {
+        input: CompareInput;
+        method: CompareMethod;
+        candidate: CompareRequest["candidates"][number];
+        repeatIndex: number;
+        part: ReturnType<typeof question.parts.find>;
+      }
+      const tasks: TaskSpec[] = [];
       for (const input of compareRequest.inputs) {
-        if (stopped) break;
-        const part = question.parts.find((candidate) => candidate.label === input.part);
+        const part = question.parts.find((p) => p.label === input.part);
         if (!part) continue;
-
         for (const method of compareRequest.methods) {
-          if (stopped) break;
           for (const candidate of compareRequest.candidates) {
-            if (stopped) break;
-            for (let repeatIndex = 1; repeatIndex <= compareRequest.repeats; repeatIndex++) {
-              if (abortSignal.aborted) {
-                stopped = true;
-                break;
-              }
-              let row: RawComparisonRow;
-              const context = {
-                testCaseId: input.testCaseId,
-                part: input.part,
-                method: Number(method),
-                provider: candidate.provider,
-                model: candidate.modelId,
-                temperature: candidate.temperature,
-                repeatIndex,
-                repeats: compareRequest.repeats,
-              };
-              try {
-                controller.enqueue(
-                  encoder.encode(
-                    jsonLine({
-                      type: "status",
-                      stage: "generating",
-                      message: `Generating feedback for ${input.testCaseId}, Part ${input.part}, Method ${method}, ${candidate.modelId} temp ${candidate.temperature}, repeat ${repeatIndex}/${compareRequest.repeats}.`,
-                      context,
-                    })
-                  )
-                );
-
-                const result = await runComparisonMethod({
-                  questionId: "M1Q14",
-                  part: input.part,
-                  studentResponse: input.studentResponse,
-                  method,
-                  candidate,
-                });
-
-                const base = {
-                  run_id: runId,
-                  timestamp: new Date().toISOString(),
-                  question_id: "M1Q14" as const,
-                  part: input.part,
-                  test_case_id: input.testCaseId,
-                  student_response: input.studentResponse,
-                  official_score: input.officialScore,
-                  model: candidate.modelId,
-                  provider: candidate.provider,
-                  temperature: candidate.temperature,
-                  method: Number(method),
-                  repeat_index: repeatIndex,
-                  ai_score: result.aiScore,
-                  score_match: result.aiScore === input.officialScore,
-                  feedback: result.feedback,
-                  grading_latency_ms: result.latencyMs,
-                  grading_token_count: result.totalTokens,
-                };
-
-                try {
-                  controller.enqueue(
-                    encoder.encode(
-                      jsonLine({
-                        type: "status",
-                        stage: "judging",
-                        message: `Judging feedback for ${input.testCaseId}, Part ${input.part}, Method ${method}, ${candidate.modelId} temp ${candidate.temperature}, repeat ${repeatIndex}/${compareRequest.repeats}.`,
-                        context,
-                      })
-                    )
-                  );
-
-                  const judge = await judgeFeedback({
-                    questionId: "M1Q14",
-                    part: input.part,
-                    taskType: part.taskType,
-                    studentResponse: input.studentResponse,
-                    feedback: result.feedback,
-                    aiScore: result.aiScore,
-                    maxScore: part.maxScore,
-                    judge: compareRequest.judge,
-                  });
-                  row = {
-                    ...base,
-                    judge_run: true,
-                    judge_track: judge.track,
-                    confirmation_clarity: judge.confirmation_clarity ?? "",
-                    scope_control: judge.scope_control ?? "",
-                    task_focus: judge.task_focus ?? "",
-                    specificity: judge.specificity ?? "",
-                    manageability: judge.manageability ?? "",
-                    answer_leakage: judge.answer_leakage ?? "",
-                    overall_quality: judge.overall_quality ?? "",
-                    judge_rationale: judge.rationale,
-                    judge_latency_ms: judge.latencyMs,
-                    status: "success",
-                    error: "",
-                  };
-                } catch (judgeErr) {
-                  console.error("[/api/compare-feedback] judge failed:", judgeErr);
-                  row = {
-                    ...base,
-                    ...emptyJudgeFields(),
-                    status: "success",
-                    error: judgeErr instanceof Error ? `Judge failed: ${judgeErr.message}` : "Judge failed.",
-                  };
-                }
-              } catch (err) {
-                console.error("[/api/compare-feedback] generation failed:", err);
-                row = failedRow({ runId, input, method, candidate, repeatIndex, error: err });
-              }
-
-              rows.push(row);
-              completed += 1;
-              controller.enqueue(encoder.encode(jsonLine({ type: "result", row })));
-              controller.enqueue(encoder.encode(jsonLine({ type: "progress", completed, total })));
+            for (let r = 1; r <= compareRequest.repeats; r++) {
+              tasks.push({ input, method, candidate, repeatIndex: r, part });
             }
           }
         }
       }
 
-      if (stopped) {
-        controller.enqueue(encoder.encode(jsonLine({ type: "aggregate", rows: aggregateRows(rows) })));
-        controller.enqueue(encoder.encode(jsonLine({ type: "stopped" })));
-      } else {
-        controller.enqueue(encoder.encode(jsonLine({ type: "aggregate", rows: aggregateRows(rows) })));
-        controller.enqueue(encoder.encode(jsonLine({ type: "done", runId, total })));
+      async function runTask(spec: TaskSpec) {
+        if (stopped || abortSignal.aborted) { stopped = true; return; }
+        const { input, method, candidate, repeatIndex, part } = spec;
+        const context = {
+          testCaseId: input.testCaseId,
+          part: input.part,
+          method: Number(method),
+          provider: candidate.provider,
+          model: candidate.modelId,
+          temperature: candidate.temperature,
+          repeatIndex,
+          repeats: compareRequest.repeats,
+        };
+
+        let row: RawComparisonRow;
+        try {
+          controller.enqueue(
+            encoder.encode(jsonLine({
+              type: "status", stage: "generating",
+              message: `Generating feedback for ${input.testCaseId}, Part ${input.part}, Method ${method}, ${candidate.modelId} temp ${candidate.temperature}, repeat ${repeatIndex}/${compareRequest.repeats}.`,
+              context,
+            }))
+          );
+
+          const result = await runComparisonMethod({
+            questionId: "M1Q14",
+            part: input.part,
+            studentResponse: input.studentResponse,
+            method,
+            candidate,
+          });
+
+          const base = {
+            run_id: runId,
+            timestamp: new Date().toISOString(),
+            question_id: "M1Q14" as const,
+            part: input.part,
+            test_case_id: input.testCaseId,
+            student_response: input.studentResponse,
+            official_score: input.officialScore,
+            model: candidate.modelId,
+            provider: candidate.provider,
+            temperature: candidate.temperature,
+            method: Number(method),
+            repeat_index: repeatIndex,
+            ai_score: result.aiScore,
+            score_match: result.aiScore === input.officialScore,
+            feedback: result.feedback,
+            grading_latency_ms: result.latencyMs,
+            grading_token_count: result.totalTokens,
+          };
+
+          try {
+            controller.enqueue(
+              encoder.encode(jsonLine({
+                type: "status", stage: "judging",
+                message: `Judging feedback for ${input.testCaseId}, Part ${input.part}, Method ${method}, ${candidate.modelId} temp ${candidate.temperature}, repeat ${repeatIndex}/${compareRequest.repeats}.`,
+                context,
+              }))
+            );
+
+            const judge = await judgeFeedback({
+              questionId: "M1Q14",
+              part: input.part,
+              taskType: part!.taskType,
+              studentResponse: input.studentResponse,
+              feedback: result.feedback,
+              aiScore: result.aiScore,
+              maxScore: part!.maxScore,
+              judge: compareRequest.judge,
+            });
+            row = {
+              ...base,
+              judge_run: true,
+              judge_track: judge.track,
+              confirmation_clarity: judge.confirmation_clarity ?? "",
+              scope_control: judge.scope_control ?? "",
+              task_focus: judge.task_focus ?? "",
+              specificity: judge.specificity ?? "",
+              manageability: judge.manageability ?? "",
+              answer_leakage: judge.answer_leakage ?? "",
+              overall_quality: judge.overall_quality ?? "",
+              judge_rationale: judge.rationale,
+              judge_latency_ms: judge.latencyMs,
+              status: "success",
+              error: "",
+            };
+          } catch (judgeErr) {
+            console.error("[/api/compare-feedback] judge failed:", judgeErr);
+            row = {
+              ...base,
+              ...emptyJudgeFields(),
+              status: "success",
+              error: judgeErr instanceof Error ? `Judge failed: ${judgeErr.message}` : "Judge failed.",
+            };
+          }
+        } catch (err) {
+          console.error("[/api/compare-feedback] generation failed:", err);
+          row = failedRow({ runId, input, method, candidate, repeatIndex, error: err });
+        }
+
+        rows.push(row);
+        completed += 1;
+        controller.enqueue(encoder.encode(jsonLine({ type: "result", row })));
+        controller.enqueue(encoder.encode(jsonLine({ type: "progress", completed, total })));
       }
+
+      // Run with concurrency limit of 3 to stay within rate limits and timeouts
+      const CONCURRENCY = 3;
+      for (let i = 0; i < tasks.length && !stopped; i += CONCURRENCY) {
+        if (abortSignal.aborted) { stopped = true; break; }
+        await Promise.all(tasks.slice(i, i + CONCURRENCY).map(runTask));
+      }
+
+      controller.enqueue(encoder.encode(jsonLine({ type: "aggregate", rows: aggregateRows(rows) })));
+      controller.enqueue(encoder.encode(jsonLine({ type: stopped ? "stopped" : "done", runId, total })));
       controller.close();
     },
   });
