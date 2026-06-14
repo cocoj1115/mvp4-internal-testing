@@ -279,7 +279,6 @@ export default function AIGPage() {
   }
 
   const selectedStandard = standards.find((s) => s.standard === standardCode);
-  const selectedMethod = METHODS.find((m) => m.id === methodId);
 
   return (
     <div
