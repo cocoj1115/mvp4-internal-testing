@@ -198,6 +198,7 @@ function IllustrationAsset({
   return (
     <div>
       {b64 ? (
+        // eslint-disable-next-line @next/next/no-img-element
         <img
           src={`data:image/png;base64,${b64}`}
           alt={caption}
