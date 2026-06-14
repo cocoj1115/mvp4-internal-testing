@@ -1,0 +1,560 @@
+{
+  "taxonomy": {
+    "Recall / Identify / Classify": {
+      "definition": "Name, label, retrieve, or categorize a concept, structure, factor, process, or variable.",
+      "scaffolding": "Usually needs concept/vocabulary support."
+    },
+    "Explain Mechanism": {
+      "definition": "Explain how or why a biological process leads to an outcome.",
+      "scaffolding": "Needs causal-link scaffolds."
+    },
+    "Apply Concept": {
+      "definition": "Use a known biology idea in a new scenario or organism/context.",
+      "scaffolding": "Needs transfer prompts and concept naming."
+    },
+    "Compare / Contrast": {
+      "definition": "State similarities, differences, or relationships across processes, structures, or cases.",
+      "scaffolding": "Needs parallel comparison frames."
+    },
+    "Data Interpretation": {
+      "definition": "Read values, trends, or relationships from a table or numeric data.",
+      "scaffolding": "Needs evidence-reading support."
+    },
+    "Graph Interpretation": {
+      "definition": "Use axes, trends, slopes, peaks, or comparisons from a graph.",
+      "scaffolding": "Needs graph literacy support."
+    },
+    "Prediction": {
+      "definition": "Infer a likely outcome from a pattern, mechanism, or scenario.",
+      "scaffolding": "Needs if-then-because reasoning."
+    },
+    "Evaluation / Justification": {
+      "definition": "Make a choice, claim, or recommendation and support it with evidence.",
+      "scaffolding": "Needs CER-style scaffolds."
+    },
+    "Experimental Design / Control": {
+      "definition": "Identify or explain variables, controls, setup purpose, measurements, or investigation design.",
+      "scaffolding": "Needs investigation-design language."
+    },
+    "Modeling / Simulation": {
+      "definition": "Interpret, complete, or reason from a model, Punnett square, simulation, or diagram.",
+      "scaffolding": "Needs representation-to-biology mapping."
+    },
+    "Process Mapping / Representation Completion": {
+      "definition": "Complete a structured process chart or explain transformations across steps.",
+      "scaffolding": "Needs step-by-step process support."
+    },
+    "Synthesis / Design": {
+      "definition": "Propose a valid process, plan, sequence, or design to achieve a biological goal.",
+      "scaffolding": "Needs planning/sequencing scaffolds."
+    }
+  },
+  "cards": [
+    {
+      "card_id": "2025A-Q1A",
+      "item_id": "2025A-Q1",
+      "part": "A",
+      "source": "2025ModASampler",
+      "prompt": "Describe the substance in the cell that determines the order of amino acids in a protein.",
+      "primary_type": "Recall / Identify / Classify",
+      "secondary_type": "Explain Mechanism",
+      "cognitive_demand": "",
+      "evidence_demand": "Concept only"
+    },
+    {
+      "card_id": "2025A-Q1B",
+      "item_id": "2025A-Q1",
+      "part": "B",
+      "source": "2025ModASampler",
+      "prompt": "Explain how the order of amino acids affects the structure of a protein.",
+      "primary_type": "Explain Mechanism",
+      "secondary_type": "Cause-effect reasoning",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Mechanism-based"
+    },
+    {
+      "card_id": "2025A-Q1C",
+      "item_id": "2025A-Q1",
+      "part": "C",
+      "source": "2025ModASampler",
+      "prompt": "Explain why having many types of proteins is important for a cell.",
+      "primary_type": "Explain Mechanism",
+      "secondary_type": "Apply Concept",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Mechanism-based"
+    },
+    {
+      "card_id": "2025A-Q2A",
+      "item_id": "2025A-Q2",
+      "part": "A",
+      "source": "2025ModASampler",
+      "prompt": "Briefly describe why the student’s eyes changed after bright light was turned on.",
+      "primary_type": "Explain Mechanism",
+      "secondary_type": "Apply Concept",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Diagram/scenario"
+    },
+    {
+      "card_id": "2025A-Q2B",
+      "item_id": "2025A-Q2",
+      "part": "B",
+      "source": "2025ModASampler",
+      "prompt": "Explain why the classroom was dimly lit before starting the investigation.",
+      "primary_type": "Experimental Design / Control",
+      "secondary_type": "Explain setup rationale",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Investigation setup"
+    },
+    {
+      "card_id": "2025A-Q2C",
+      "item_id": "2025A-Q2",
+      "part": "C",
+      "source": "2025ModASampler",
+      "prompt": "Describe a feedback mechanism for the pupil if a person moves from bright light to dim light.",
+      "primary_type": "Explain Mechanism",
+      "secondary_type": "Prediction",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Scenario-based"
+    },
+    {
+      "card_id": "2025B-Q1A",
+      "item_id": "2025B-Q1",
+      "part": "A",
+      "source": "2025ModBSampler",
+      "prompt": "Describe how breeders can develop different-colored bearded dragons.",
+      "primary_type": "Apply Concept",
+      "secondary_type": "Synthesis / Design",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Scenario-based"
+    },
+    {
+      "card_id": "2025B-Q1B",
+      "item_id": "2025B-Q1",
+      "part": "B",
+      "source": "2025ModBSampler",
+      "prompt": "Describe the role of parental DNA in affecting the colors produced in offspring.",
+      "primary_type": "Explain Mechanism",
+      "secondary_type": "Inheritance reasoning",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Mechanism-based"
+    },
+    {
+      "card_id": "2025B-Q1C",
+      "item_id": "2025B-Q1",
+      "part": "C",
+      "source": "2025ModBSampler",
+      "prompt": "A particular desired color is a recessive trait. Describe the process a breeder should use to develop the recessive trait in bearded dragons.",
+      "primary_type": "Synthesis / Design",
+      "secondary_type": "Apply Concept",
+      "cognitive_demand": "High",
+      "evidence_demand": "Scenario-based"
+    },
+    {
+      "card_id": "2025B-Q2A",
+      "item_id": "2025B-Q2",
+      "part": "A",
+      "source": "2025ModBSampler",
+      "prompt": "Describe a likely way adding green stormwater infrastructure would benefit the local ecosystem.",
+      "primary_type": "Prediction",
+      "secondary_type": "Apply Concept",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Scenario/table context"
+    },
+    {
+      "card_id": "2025B-Q2B",
+      "item_id": "2025B-Q2",
+      "part": "B",
+      "source": "2025ModBSampler",
+      "prompt": "Describe two ways researchers could measure the effectiveness of green stormwater infrastructure.",
+      "primary_type": "Experimental Design / Control",
+      "secondary_type": "Evaluation / Measurement",
+      "cognitive_demand": "High",
+      "evidence_demand": "Investigation design"
+    },
+    {
+      "card_id": "2024-Q1A",
+      "item_id": "2024-Q1",
+      "part": "A",
+      "source": "Sample_without answers (2024-2025)",
+      "prompt": "Describe the purpose of the plastic bags placed over the plants.",
+      "primary_type": "Experimental Design / Control",
+      "secondary_type": "Explain setup rationale",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Investigation setup"
+    },
+    {
+      "card_id": "2024-Q1B",
+      "item_id": "2024-Q1",
+      "part": "B",
+      "source": "Sample_without answers (2024-2025)",
+      "prompt": "Describe the relationship between room temperature and amount of water collected.",
+      "primary_type": "Data Interpretation",
+      "secondary_type": "Trend description",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Table-based"
+    },
+    {
+      "card_id": "2024-Q1C",
+      "item_id": "2024-Q1",
+      "part": "C",
+      "source": "Sample_without answers (2024-2025)",
+      "prompt": "Using the data, describe how stomata most likely help plants maintain homeostasis.",
+      "primary_type": "Evaluation / Justification",
+      "secondary_type": "Data Interpretation",
+      "cognitive_demand": "High",
+      "evidence_demand": "Data-based"
+    },
+    {
+      "card_id": "2024-Q2A",
+      "item_id": "2024-Q2",
+      "part": "A",
+      "source": "Sample_without answers (2024-2025)",
+      "prompt": "Identify the abiotic limiting factor the researcher studied.",
+      "primary_type": "Recall / Identify / Classify",
+      "secondary_type": "Data/context reading",
+      "cognitive_demand": "Low-Mod",
+      "evidence_demand": "Scenario/graph context"
+    },
+    {
+      "card_id": "2024-Q2B",
+      "item_id": "2024-Q2",
+      "part": "B",
+      "source": "Sample_without answers (2024-2025)",
+      "prompt": "Predict how seed production would be affected by access to unlimited resources.",
+      "primary_type": "Prediction",
+      "secondary_type": "Apply Concept",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Graph/scenario"
+    },
+    {
+      "card_id": "2024-Q2C",
+      "item_id": "2024-Q2",
+      "part": "C",
+      "source": "Sample_without answers (2024-2025)",
+      "prompt": "Describe the effect of water availability on species abundance in the area.",
+      "primary_type": "Data Interpretation",
+      "secondary_type": "Ecological explanation",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Graph-based"
+    },
+    {
+      "card_id": "2024-Q3A",
+      "item_id": "2024-Q3",
+      "part": "A",
+      "source": "Sample_without answers (2024-2025)",
+      "prompt": "Using evidence from the graph, identify the antibiotic with the most resistance.",
+      "primary_type": "Graph Interpretation",
+      "secondary_type": "Recall / Identify",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Graph-based"
+    },
+    {
+      "card_id": "2024-Q3B",
+      "item_id": "2024-Q3",
+      "part": "B",
+      "source": "Sample_without answers (2024-2025)",
+      "prompt": "Describe how changes in bacterial DNA enable populations to develop antibiotic resistance.",
+      "primary_type": "Explain Mechanism",
+      "secondary_type": "Evolutionary reasoning",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Mechanism-based"
+    },
+    {
+      "card_id": "2024-Q3C",
+      "item_id": "2024-Q3",
+      "part": "C",
+      "source": "Sample_without answers (2024-2025)",
+      "prompt": "Identify the antibiotic scientists should investigate to treat bacterial infections. Explain using the data.",
+      "primary_type": "Evaluation / Justification",
+      "secondary_type": "Graph Interpretation",
+      "cognitive_demand": "High",
+      "evidence_demand": "Graph-based"
+    },
+    {
+      "card_id": "2024-Q4A",
+      "item_id": "2024-Q4",
+      "part": "A",
+      "source": "Sample_without answers (2024-2025)",
+      "prompt": "Identify a likely reason for conducting a small-scale simulation before direct reintroduction.",
+      "primary_type": "Modeling / Simulation",
+      "secondary_type": "Experimental Design / Control",
+      "cognitive_demand": "High",
+      "evidence_demand": "Simulation setup"
+    },
+    {
+      "card_id": "2024-Q4B",
+      "item_id": "2024-Q4",
+      "part": "B",
+      "source": "Sample_without answers (2024-2025)",
+      "prompt": "Predict the likely outcome of reintroducing blue-tailed skinks and support with simulation evidence.",
+      "primary_type": "Prediction",
+      "secondary_type": "Evaluation / Justification",
+      "cognitive_demand": "High",
+      "evidence_demand": "Simulation data"
+    },
+    {
+      "card_id": "2024-Q4C",
+      "item_id": "2024-Q4",
+      "part": "C",
+      "source": "Sample_without answers (2024-2025)",
+      "prompt": "Describe the long-term genetic benefit of adding zoo skinks to a wild habitat.",
+      "primary_type": "Apply Concept",
+      "secondary_type": "Explain Mechanism",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Scenario-based"
+    },
+    {
+      "card_id": "2011-Q1A",
+      "item_id": "2011-Q1",
+      "part": "A",
+      "source": "sample_with answers (2011)",
+      "prompt": "Identify a structural difference between prokaryotic and eukaryotic cells related to size difference.",
+      "primary_type": "Recall / Identify / Classify",
+      "secondary_type": "Compare / Contrast",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Concept only"
+    },
+    {
+      "card_id": "2011-Q1B",
+      "item_id": "2011-Q1",
+      "part": "B",
+      "source": "sample_with answers (2011)",
+      "prompt": "Based on that structural difference, explain why prokaryotic cells can be much smaller.",
+      "primary_type": "Explain Mechanism",
+      "secondary_type": "Compare / Contrast",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Mechanism-based"
+    },
+    {
+      "card_id": "2011-Q1C",
+      "item_id": "2011-Q1",
+      "part": "C",
+      "source": "sample_with answers (2011)",
+      "prompt": "Describe one similarity between prokaryotic and eukaryotic cells independent of size.",
+      "primary_type": "Compare / Contrast",
+      "secondary_type": "Recall / Identify",
+      "cognitive_demand": "Low-Mod",
+      "evidence_demand": "Concept only"
+    },
+    {
+      "card_id": "2011-Q2A",
+      "item_id": "2011-Q2",
+      "part": "A",
+      "source": "sample_with answers (2011)",
+      "prompt": "Describe the general composition of a protein molecule.",
+      "primary_type": "Recall / Identify / Classify",
+      "secondary_type": "Describe structure",
+      "cognitive_demand": "Low-Mod",
+      "evidence_demand": "Concept only"
+    },
+    {
+      "card_id": "2011-Q2B",
+      "item_id": "2011-Q2",
+      "part": "B",
+      "source": "sample_with answers (2011)",
+      "prompt": "Describe how protein structures differ from carbohydrate structures.",
+      "primary_type": "Compare / Contrast",
+      "secondary_type": "Recall / Identify",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Concept only"
+    },
+    {
+      "card_id": "2011-Q2C",
+      "item_id": "2011-Q2",
+      "part": "C",
+      "source": "sample_with answers (2011)",
+      "prompt": "Describe how protein functions differ from carbohydrate functions.",
+      "primary_type": "Compare / Contrast",
+      "secondary_type": "Apply Concept",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Concept only"
+    },
+    {
+      "card_id": "2011-Q3A",
+      "item_id": "2011-Q3",
+      "part": "A",
+      "source": "sample_with answers (2011)",
+      "prompt": "Complete a chart describing energy transformations in photosynthesis and cellular respiration.",
+      "primary_type": "Process Mapping / Representation Completion",
+      "secondary_type": "Explain Mechanism",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Diagram/chart"
+    },
+    {
+      "card_id": "2011-Q3B",
+      "item_id": "2011-Q3",
+      "part": "B",
+      "source": "sample_with answers (2011)",
+      "prompt": "Describe how photosynthesis energy transformations relate to cellular respiration energy transformations.",
+      "primary_type": "Explain Mechanism",
+      "secondary_type": "Compare / Contrast",
+      "cognitive_demand": "High",
+      "evidence_demand": "Diagram/concept"
+    },
+    {
+      "card_id": "2011-Q4A",
+      "item_id": "2011-Q4",
+      "part": "A",
+      "source": "sample_with answers (2011)",
+      "prompt": "Identify the membrane process that produces a potassium ion concentration gradient.",
+      "primary_type": "Recall / Identify / Classify",
+      "secondary_type": "Apply Concept",
+      "cognitive_demand": "Low-Mod",
+      "evidence_demand": "Scenario-based"
+    },
+    {
+      "card_id": "2011-Q4B",
+      "item_id": "2011-Q4",
+      "part": "B",
+      "source": "sample_with answers (2011)",
+      "prompt": "Explain the process that occurs as the cell produces the ion concentration gradient.",
+      "primary_type": "Explain Mechanism",
+      "secondary_type": "Apply Concept",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Mechanism-based"
+    },
+    {
+      "card_id": "2011-Q4C",
+      "item_id": "2011-Q4",
+      "part": "C",
+      "source": "sample_with answers (2011)",
+      "prompt": "Compare potassium ion transport to another mechanism that moves material across the membrane.",
+      "primary_type": "Compare / Contrast",
+      "secondary_type": "Explain Mechanism",
+      "cognitive_demand": "High",
+      "evidence_demand": "Concept only"
+    },
+    {
+      "card_id": "2011-Q5A",
+      "item_id": "2011-Q5",
+      "part": "A",
+      "source": "sample_with answers (2011)",
+      "prompt": "Identify the meiosis step when chromosomes would most likely fail to separate.",
+      "primary_type": "Recall / Identify / Classify",
+      "secondary_type": "Process sequencing",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Concept only"
+    },
+    {
+      "card_id": "2011-Q5B",
+      "item_id": "2011-Q5",
+      "part": "B",
+      "source": "sample_with answers (2011)",
+      "prompt": "Describe how chromosome separation in meiosis differs from chromosome separation in mitosis.",
+      "primary_type": "Compare / Contrast",
+      "secondary_type": "Process explanation",
+      "cognitive_demand": "High",
+      "evidence_demand": "Concept only"
+    },
+    {
+      "card_id": "2011-Q5C",
+      "item_id": "2011-Q5",
+      "part": "C",
+      "source": "sample_with answers (2011)",
+      "prompt": "Compare effects of nondisjunction in meiosis with effects of nondisjunction in mitosis.",
+      "primary_type": "Compare / Contrast",
+      "secondary_type": "Apply Concept",
+      "cognitive_demand": "High",
+      "evidence_demand": "Scenario-based"
+    },
+    {
+      "card_id": "2011-Q6A",
+      "item_id": "2011-Q6",
+      "part": "A",
+      "source": "sample_with answers (2011)",
+      "prompt": "Use a Punnett square to show a cross that would produce only roan offspring.",
+      "primary_type": "Modeling / Simulation",
+      "secondary_type": "Synthesis / Design",
+      "cognitive_demand": "High",
+      "evidence_demand": "Punnett square/model"
+    },
+    {
+      "card_id": "2011-Q6B",
+      "item_id": "2011-Q6",
+      "part": "B",
+      "source": "sample_with answers (2011)",
+      "prompt": "Explain how a roan calf results from one white and one red parent using letters for genes.",
+      "primary_type": "Explain Mechanism",
+      "secondary_type": "Modeling / Simulation",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Genetic notation"
+    },
+    {
+      "card_id": "2011-Q6C",
+      "item_id": "2011-Q6",
+      "part": "C",
+      "source": "sample_with answers (2011)",
+      "prompt": "Predict possible genotypes and phenotypes from two roan cattle.",
+      "primary_type": "Prediction",
+      "secondary_type": "Modeling / Simulation",
+      "cognitive_demand": "High",
+      "evidence_demand": "Punnett/inheritance model"
+    },
+    {
+      "card_id": "2011-Q7A",
+      "item_id": "2011-Q7",
+      "part": "A",
+      "source": "sample_with answers (2011)",
+      "prompt": "Based on COII gene base-difference data, describe a possible evolutionary relationship among rats, mice, and cows.",
+      "primary_type": "Data Interpretation",
+      "secondary_type": "Evolutionary reasoning",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Table-based"
+    },
+    {
+      "card_id": "2011-Q7B",
+      "item_id": "2011-Q7",
+      "part": "B",
+      "source": "sample_with answers (2011)",
+      "prompt": "Describe how organisms sharing a common gene such as COII supports evolution.",
+      "primary_type": "Explain Mechanism",
+      "secondary_type": "Scientific justification",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Concept/data context"
+    },
+    {
+      "card_id": "2011-Q7C",
+      "item_id": "2011-Q7",
+      "part": "C",
+      "source": "sample_with answers (2011)",
+      "prompt": "Compare evolutionary relationships between monkey, rat, and mouse using COII base-difference data.",
+      "primary_type": "Data Interpretation",
+      "secondary_type": "Compare / Contrast",
+      "cognitive_demand": "High",
+      "evidence_demand": "Table/numeric data"
+    },
+    {
+      "card_id": "SG-Q1",
+      "item_id": "SG-Q1",
+      "part": "",
+      "source": "Keystone Biology Study Guide",
+      "prompt": "Describe the general composition of a protein molecule.",
+      "primary_type": "Recall / Identify / Classify",
+      "secondary_type": "Describe structure",
+      "cognitive_demand": "Low-Mod",
+      "evidence_demand": "Concept only"
+    },
+    {
+      "card_id": "SG-Q2",
+      "item_id": "SG-Q2",
+      "part": "",
+      "source": "Keystone Biology Study Guide",
+      "prompt": "Describe how protein structures differ from carbohydrate structures.",
+      "primary_type": "Compare / Contrast",
+      "secondary_type": "Recall / Identify",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Concept only"
+    },
+    {
+      "card_id": "SG-Q3",
+      "item_id": "SG-Q3",
+      "part": "",
+      "source": "Keystone Biology Study Guide",
+      "prompt": "Describe how protein functions differ from carbohydrate functions.",
+      "primary_type": "Compare / Contrast",
+      "secondary_type": "Apply Concept",
+      "cognitive_demand": "Moderate",
+      "evidence_demand": "Concept only"
+    }
+  ]
+}

@@ -94,6 +94,13 @@ function topKWithRerank(queryEmbedding: number[], query: string, chunks: KBChunk
     .map((r) => r.chunk);
 }
 
+// ── Embedding helper ──────────────────────────────────────────────────────
+
+export async function embedText(input: string): Promise<number[]> {
+  const res = await client.embeddings.create({ model: "text-embedding-3-small", input });
+  return res.data[0].embedding;
+}
+
 // ── Main export ───────────────────────────────────────────────────────────
 
 export async function retrieveFromKB(
@@ -106,13 +113,10 @@ export async function retrieveFromKB(
 
   try {
     // One call for KD1 + KD2 (query = part prompt), one for KE (query = student response)
-    const [promptEmbedRes, responseEmbedRes] = await Promise.all([
-      client.embeddings.create({ model: "text-embedding-3-small", input: partPrompt }),
-      client.embeddings.create({ model: "text-embedding-3-small", input: studentResponse }),
+    const [promptEmbedding, responseEmbedding] = await Promise.all([
+      embedText(partPrompt),
+      embedText(studentResponse),
     ]);
-
-    const promptEmbedding   = promptEmbedRes.data[0].embedding;
-    const responseEmbedding = responseEmbedRes.data[0].embedding;
 
     const kd1Chunks = topK(promptEmbedding,   kd1, topKCount);
     const kd2Chunks = topK(promptEmbedding,   kd2, topKCount);

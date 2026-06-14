@@ -1,0 +1,241 @@
+{
+  "general": "GENERAL DESCRIPTION OF SCORING GUIDELINES FOR BIOLOGY (per part, 0-3):\n3 Points - The response demonstrates a thorough understanding of the scientific content, concepts, and/or procedures required by the task(s). The response provides a clear, complete, and correct response as required by the task(s). The response may contain a minor blemish or omission in work or explanation that does not detract from demonstrating a thorough understanding.\n2 Points - The response demonstrates a partial understanding of the scientific content, concepts, and/or procedures required by the task(s). The response is somewhat correct with partial understanding of the required scientific content, concepts, and/or procedures demonstrated and/or explained. The response may contain some work that is incomplete or unclear.\n1 Point - The response demonstrates a minimal understanding of the scientific content, concepts, and/or procedures required by the task(s). The response is somewhat correct with minimal understanding of the required scientific content, concepts, and/or procedures demonstrated and/or explained. The response may contain some work that is incomplete or unclear.\n0 Points - The response provides insufficient evidence to demonstrate any understanding of the scientific content, concepts, and/or procedures as required by the task(s). The response may show only information copied or rephrased from the question or insufficient correct information to receive a score of 1.\nNote: No deductions should be taken for misspelled words or grammatical errors.",
+  "item_specific": [
+    {
+      "item": "M1Q14",
+      "alignment": "3.1.9-12.A",
+      "dok": 2,
+      "points_possible": 3,
+      "scoring_guideline": "3 - Thorough understanding of constructing an explanation based on evidence for how the structure of DNA determines the structure of proteins which carry out the essential functions of life through systems of specialized cells, by ALL of:\n  - describing the substance in the cell that determines the order of amino acids in a protein  AND\n  - explaining how the order of amino acids affects the structure of a protein  AND\n  - explaining why having many types of proteins is important for a cell.\n  The response is clear, complete, and correct.\n2 - Partial understanding: fulfilling TWO of the bullets listed under the 3-point response. May contain some work that is incomplete or unclear.\n1 - Minimal understanding: fulfilling ONE of the bullets listed under the 3-point response. May contain some work that is incomplete or unclear.\n0 - Insufficient evidence to demonstrate any understanding of the concept being tested.",
+      "credit_responses": {
+        "Part A": [
+          "DNA in the cell determines the order of amino acids in a protein.",
+          "The order of amino acids is determined by the mRNA sequence (which is determined by DNA)."
+        ],
+        "Part B": [
+          "Side chains of amino acids are variable (e.g., hydrophobic, hydrophilic, charged, polar, nonpolar, have disulfide bridges) and their physical and chemical properties determine the physical and chemical properties of the protein structure.",
+          "The order of amino acids affects the structure of the protein by influencing how the protein folds, causing the final physical shape of the protein.",
+          "The structure of the protein is affected by the size, shape, and/or characteristics of the side chains on amino acids, which interact and affect the process of protein folding."
+        ],
+        "Part C": [
+          "A protein has a specific function, determined by its structure. Specific proteins cannot perform other functions, so the cell needs a variety of protein types in order to perform a variety of functions, such as catalysis, contraction, support, transport, communication, protection.",
+          "Each different function in the cell (e.g., structure, support, storage, enzymes, transport, communication) requires a specific protein to perform that function.",
+          "Proteins are specialized for their function. Therefore, the cell needs many different structures or types of proteins."
+        ]
+      },
+      "sample_responses": [
+        {
+          "score": 3,
+          "responses": {
+            "Part A": "The substance in the cell that determines the order of amino acids is DNA.",
+            "Part B": "The order of amino acids affects the structure of a protein because it dictates the folding pattern of the protein, which changes it's shape and function. Amino acids also determine the 3-dimensional structure of a protein, so the order will change that.",
+            "Part C": "Having many types of proteins is important for a cell because each serve a different unique function in the body. They are needed for biological processes like cell signaling and metabolism. Different proteins have different structures and functions, allowing them to carry out tasks effeciently in a cell."
+          },
+          "annotation": "Thorough understanding. Part A correctly describes the substance (DNA). Part B correctly explains how amino-acid order affects protein structure (folding pattern -> shape and function). Part C correctly explains why many protein types are important (each serves a different function). Clear, complete, and correct."
+        },
+        {
+          "score": 2,
+          "responses": {
+            "Part A": "the amino acids are determined by the mRNA sequence that comes from the DNA to the RNA.",
+            "Part B": "the stucture can be affected beause if there was a mutation in the sequence then the structure wouldnt be the same unless the mutation would be a silent mutation.",
+            "Part C": "it helps to build the cells up and crete the shapes of cells to build up the space provided by the groups of amino acids."
+          },
+          "annotation": "Partial understanding. Part A correct (DNA to the RNA). Part B correct (mutation in the sequence changes the structure unless silent). Part C incorrect - does not receive credit."
+        },
+        {
+          "score": 1,
+          "responses": {
+            "Part A": "The DNA sequece determinds the order of amino acids.",
+            "Part B": "The amino acid sequence affects the structure of a protein because how ever the amino acid sequence is determines the structure of a protein.",
+            "Part C": "Many types of proteins is good for the cell because different parts of the cell needs different proteins."
+          },
+          "annotation": "Minimal understanding. Part A correct (DNA). Part B incorrect (circular, no mechanism) - no credit. Part C incorrect - no credit."
+        },
+        {
+          "score": 0,
+          "responses": {
+            "Part A": "the substance that determines the order of amino acid proteins is the carboxylic it see exactly how much needs to be in the cell order",
+            "Part B": "the structure of the amino acids affect the structure of a protein because if it doesnt have the right amount of genes it could come out as a totally different organism",
+            "Part C": "having many tupes of proteins is important because it determines what kind of cell the proteins make. if one thing is off then the cell will be a totally different cell than what is supposed to be made."
+          },
+          "annotation": "Insufficient evidence. Part A incorrect (carboxylic). Part B incorrect. Part C incorrect. No credit on any part."
+        }
+      ]
+    },
+    {
+      "item": "M1Q15",
+      "alignment": "3.1.9-12.C",
+      "dok": 2,
+      "points_possible": 3,
+      "scoring_guideline": "3 - Thorough understanding of planning and conducting an investigation to provide evidence that feedback mechanisms maintain homeostasis, by ALL of:\n  - describing why the student's eyes changed  AND\n  - explaining why the teacher had the classroom dimly lit for a few minutes before starting the investigation  AND\n  - describing a feedback mechanism for the pupil of a person's eye if the person were to move from an area with bright light to an area with dim light.\n  The response is clear, complete, and correct.\n2 - Partial understanding: fulfilling TWO of the bullets listed under the 3-point response. May contain some work that is incomplete or unclear.\n1 - Minimal understanding: fulfilling ONE of the bullets listed under the 3-point response. May contain some work that is incomplete or unclear.\n0 - Insufficient evidence to demonstrate any understanding of the concept being tested.",
+      "credit_responses": {
+        "Part A": [
+          "The student's eyes changed because the amount of light in the environment changed."
+        ],
+        "Part B": [
+          "The teacher adjusted the light for a few minutes to give the students' eyes a chance to adjust (dilate) to the current (dim) environment.",
+          "Keeping the light level low for a few minutes enabled the teacher to establish a baseline or setpoint for the investigation for comparison when the light is changed to bright."
+        ],
+        "Part C": [
+          "The change from bright light to low light will stimulate the eye (pupil/iris) to change (dilate, open) to allow more light to enter the eye.",
+          "Too much light causes structures in the eye to change shape to reduce the amount of light that enters the eye.",
+          "Too little light causes the structures in the eye to change shape to increase the light that enters the eye."
+        ]
+      },
+      "sample_responses": [
+        {
+          "score": 3,
+          "responses": {
+            "Part A": "The studnent's pupils are reacting to the amont of light that is available.",
+            "Part B": "The student's eyes had to have time to fully adjust to the dim light in order for them to react to a sudden change in the amount of light.",
+            "Part C": "When the person's eyes are given less light, the pupils will dilate/become larger in response in order to gain as much light as it can so that the person is able to see better."
+          },
+          "annotation": "Thorough understanding. All three parts correct. Clear, complete, and correct."
+        },
+        {
+          "score": 2,
+          "responses": {
+            "Part A": "The students eyes changed because the pupil of the eye no longer had to adjust, had to enlarge in order to see more clearly. so it returned to its normal state.",
+            "Part B": "The teacher has the classroom dimly lit for a few minutes before starting the investigation because she wanted to show the difference in the eyes shape to see how the different light settings can affect the size of the pupil.",
+            "Part C": "A feedback mechanism for the pupil of a persons eye if a person were to move from an area with brihgt ligth to an area with dim light is how the pupils size will enlarge greatly to allow the person to see more celarly once again, asjusting to the new light source."
+          },
+          "annotation": "Partial understanding. Part A incorrect - no credit. Part B correct. Part C correct."
+        },
+        {
+          "score": 1,
+          "responses": {
+            "Part A": "The switch of the lights are instant. so it might take time to get used to it.",
+            "Part B": "The teacher had it dim so there can be change. and differences. If she had it in bright light the whole time, you wouldn't notice a change.",
+            "Part C": "The eye would have to adjust between the dimness of the lights."
+          },
+          "annotation": "Minimal understanding. Part A incorrect - no credit. Part B correct. Part C incorrect - no credit."
+        },
+        {
+          "score": 0,
+          "responses": {
+            "Part A": "The students eyes changed because of the quick time that the lights changed and there eyes didn't adjust yet.",
+            "Part B": "To show how the eyes are sensortive.",
+            "Part C": "They would do the same thing."
+          },
+          "annotation": "Insufficient evidence. All three parts incorrect. No credit."
+        }
+      ]
+    },
+    {
+      "item": "M2Q14",
+      "alignment": "3.1.9-12.P",
+      "dok": 2,
+      "points_possible": 3,
+      "scoring_guideline": "3 - Thorough understanding of asking questions to clarify relationships about the role of DNA and chromosomes in coding the instructions for characteristic traits passed from parents to offspring, by ALL of:\n  - describing how breeders can develop different-colored bearded dragons  AND\n  - describing the role of parental DNA in affecting the colors produced in the offspring  AND\n  - describing the process a breeder should use to develop the recessive trait in bearded dragons.\n  The response is clear, complete, and correct.\n2 - Partial understanding: fulfilling TWO of the bullets listed under the 3-point response. May contain some work that is incomplete or unclear.\n1 - Minimal understanding: fulfilling ONE of the bullets listed under the 3-point response. May contain some work that is incomplete or unclear.\n0 - Insufficient evidence to demonstrate any understanding of the concept being tested.",
+      "credit_responses": {
+        "Part A": [
+          "The breeders can selectively cross (breed) bearded dragons that have different appearances."
+        ],
+        "Part B": [
+          "Offspring get their DNA from their parents, and the DNA determines the traits that an organism has.",
+          "Offspring receive half of their DNA from each parent and the new combined DNA determines the proteins that are produced by cells in the offspring.",
+          "Parental DNA is passed to offspring by fertilization. The offspring's cells then produce colors based on genetic information from each parent.",
+          "Each parent provides a haploid sex cell that carries one allele for every gene. When gene pairs form through sexual reproduction, offspring phenotypes can reflect the genotypic pairs."
+        ],
+        "Part C": [
+          "The breeder should breed two individuals that are both recessive for the trait, which will result in the most offspring with the recessive trait.",
+          "The breeder should breed heterozygous individuals in order to produce homozygous recessive offspring, then breed those homozygous recessive offspring with other homozygous recessive individuals."
+        ]
+      },
+      "sample_responses": [
+        {
+          "score": 3,
+          "responses": {
+            "Part A": "Breeders can develop different colors of Bearded dragons by breeding certain colored bearded dragons together.",
+            "Part B": "The parents pass down there genes and DNA to offspring. So, the parents colors will be shown in the offspring. Or they may not depending on if they get recessive or dominant traits.",
+            "Part C": "Breed two dragons with recessive traits. Then Breed two more. This way the offspring will express those recessive traits."
+          },
+          "annotation": "Thorough understanding. All three parts correct. Clear, complete, and correct."
+        },
+        {
+          "score": 2,
+          "responses": {
+            "Part A": "To make a new color there would need to either be a mutation or incomplete dominance. An example of incomplete dominance could be a red dragon crossed with a yellow one to create an orange dragon.",
+            "Part B": "Parental DNA dictates the DNA of the offspring as the offspring's DNA is just 1/2 of each parent's DNA.",
+            "Part C": "The breeder should breed those that have the trait for a gaurenteed outcome. If there are none expressing the trait, then breed dragons that are heterozygous for the trait. This will have a 1 in 4 chance of working."
+          },
+          "annotation": "Partial understanding. Part A incorrect - no credit. Part B correct. Part C correct."
+        },
+        {
+          "score": 1,
+          "responses": {
+            "Part A": "They can breed the different-colored bearded dragons together to mix the types of melanin and create a new color of bearded dragon.",
+            "Part B": "Their role is for the Dominant and Non-dominat colors to mix and create different colored or the same colored offspings.",
+            "Part C": "The recessive trait should be used with dominant traits because it will create many types of different colored offspring."
+          },
+          "annotation": "Minimal understanding. Part A correct. Part B incorrect - no credit. Part C incorrect - no credit."
+        },
+        {
+          "score": 0,
+          "responses": {
+            "Part A": "The bearded dragons have different amounts of melanin.",
+            "Part B": "Some bearded dragons have a very strong dominant trait and other have weak recessive trait",
+            "Part C": "To breed the breeder should get a dragon that has a strong recessive trait and one that has a weak one so that the dragon has a higher rate of getting the recessive trait."
+          },
+          "annotation": "Insufficient evidence. All three parts incorrect. No credit."
+        }
+      ]
+    },
+    {
+      "item": "M2Q15",
+      "alignment": "3.1.9-12.N",
+      "dok": 3,
+      "points_possible": 3,
+      "scoring_guideline": "3 - Thorough understanding of designing, evaluating, and refining a solution for reducing the impacts of human activities on the environment and biodiversity, by BOTH of:\n  - describing a likely way that adding green stormwater infrastructure to a community would benefit the local ecosystem  AND\n  - describing two ways that researchers could measure the effectiveness of green stormwater infrastructure.\n  The response is clear, complete, and correct.\n2 - Partial understanding, by EITHER:\n  - describing two ways that researchers could measure the effectiveness  OR\n  - (describing a likely benefit way  AND  describing one way to measure effectiveness).\n1 - Minimal understanding, by EITHER:\n  - describing a likely benefit way  OR\n  - describing one way to measure effectiveness.\n0 - Insufficient evidence to demonstrate any understanding of the concept being tested.\nNote: This item has only Part A and Part B (no Part C).",
+      "credit_responses": {
+        "Part A": [
+          "The collection of rainwater could prevent flood damage and allow more water to enter the groundwater or be used by plants for photosynthesis (which also removes CO2 and returns O2 to atmosphere).",
+          "It can reduce the pollution and erosion that can be a result of stormwater runoff.",
+          "It could convert otherwise unused space (e.g., a rooftop) to additional habitat for local organisms, which could support or improve local biodiversity."
+        ],
+        "Part B": [
+          "Record incidents of flooding and compare them with historical data to determine whether there is less flooding with green stormwater infrastructure.",
+          "Measure water quality before and after a rainstorm and compare it with historical data to determine whether there is less pollution with green stormwater infrastructure.",
+          "Measure water availability in the ground water/water table before and after a storm.",
+          "Measure the amount of photosynthesis in green roof/rain garden areas (by measuring carbon dioxide and/or oxygen concentrations).",
+          "Count the number and kinds of plants (or animals) supported by garden/bioswale areas.",
+          "Measure the amount of runoff and pollutants in areas receiving runoff."
+        ]
+      },
+      "sample_responses": [
+        {
+          "score": 3,
+          "responses": {
+            "Part A": "The green roof on the infrastructure provides more oxygen in the community, as plants on the roof will take in sunlight and water and go through photosynthesis and cell respiration, creating oxygen in the air.",
+            "Part B": "The first way for researchers to measure the effectiveness of the infrastructure is to analyze stormwater volume in streets, parking lots, and roofs before and after the implementation of the green stormwater infrastructure. The second way is to analyze flower numbers in the community, as an increase in the flower number in the community signals that the rain garden is working."
+          },
+          "annotation": "Thorough understanding. Part A correct (more oxygen via photosynthesis). Part B correctly describes two measurement ways (stormwater volume before/after AND flower numbers). Clear, complete, and correct."
+        },
+        {
+          "score": 2,
+          "responses": {
+            "Part A": "The local ecosystem would no longer get flooded because the water would be taken care of in a better way this would also decrease the erosion rate.",
+            "Part B": "One way is to measure how much water is still being left on the ground. Another way is by measuring how much water is absorbed by the green stormwater ifrastructure solutions."
+          },
+          "annotation": "Partial understanding. Part A correct (less flooding, less erosion). Part B: one valid measurement way; the second repeats the first idea and gets no additional credit."
+        },
+        {
+          "score": 1,
+          "responses": {
+            "Part A": "it would help more plants grow so animals would have more food and oxagen",
+            "Part B": "do an experament some where isolated. do a large experament on a whole town"
+          },
+          "annotation": "Minimal understanding. Part A correct (more plants -> more food and oxygen). Part B too vague - no credit."
+        },
+        {
+          "score": 0,
+          "responses": {
+            "Part A": "A likely way that adding green stormwater infrastructure in a community would benefit the local ecosystem would have to be is, the plants could die, or they could also affect the growth of the plants which is not good",
+            "Part B": "Two ways researchers could measure the effectiveness of green stormwater infrastructure is, they could start by maybe changing from using greenwater, or find something that is a little more ecosystem friendly."
+          },
+          "annotation": "Insufficient evidence. Part A incorrect. Part B incorrect. No credit."
+        }
+      ]
+    }
+  ]
+}
