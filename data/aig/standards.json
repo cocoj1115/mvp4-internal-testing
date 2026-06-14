@@ -1,0 +1,122 @@
+{
+  "3.1.9-12.A": {
+    "module": "A",
+    "strand": "Structure and Function",
+    "statement": "Construct an explanation based on evidence for how the structure of DNA determines the structure of proteins which carry out the essential functions of life through systems of specialized cells."
+  },
+  "3.1.9-12.B": {
+    "module": "A",
+    "strand": "Structure and Function",
+    "statement": "Develop and use a model to illustrate the hierarchical organization of interacting systems that provide specific functions within multicellular organisms."
+  },
+  "3.1.9-12.C": {
+    "module": "A",
+    "strand": "Structure and Function",
+    "statement": "Plan and conduct an investigation to provide evidence that feedback mechanisms maintain homeostasis."
+  },
+  "3.1.9-12.E": {
+    "module": "A",
+    "strand": "Matter and Energy in Organisms and Ecosystems",
+    "statement": "Use a model to illustrate how photosynthesis transforms light energy into stored chemical energy."
+  },
+  "3.1.9-12.F": {
+    "module": "A",
+    "strand": "Matter and Energy in Organisms and Ecosystems",
+    "statement": "Construct and revise an explanation based on evidence for how carbon, hydrogen, and oxygen from sugar molecules may combine with other elements to form amino acids and/or other large carbon-based molecules."
+  },
+  "3.1.9-12.G": {
+    "module": "A",
+    "strand": "Matter and Energy in Organisms and Ecosystems",
+    "statement": "Use a model to illustrate that cellular respiration is a chemical process whereby the bonds of food molecules and oxygen molecules are broken and the bonds in new compounds are formed resulting in a net transfer of energy."
+  },
+  "3.1.9-12.J": {
+    "module": "A",
+    "strand": "Matter and Energy in Organisms and Ecosystems",
+    "statement": "Construct and revise an explanation based on evidence for the cycling of matter and flow of energy in aerobic and anaerobic conditions."
+  },
+  "3.1.9-12.H": {
+    "module": "A",
+    "strand": "Matter and Energy in Organisms and Ecosystems",
+    "statement": "Use mathematical representations to support claims for the cycling of matter and flow of energy among organisms in an ecosystem."
+  },
+  "3.1.9-12.K": {
+    "module": "A",
+    "strand": "Matter and Energy in Organisms and Ecosystems",
+    "statement": "Develop a model to illustrate the role of photosynthesis and cellular respiration in the cycling of carbon among the biosphere, atmosphere, hydrosphere, and geosphere."
+  },
+  "3.1.9-12.I": {
+    "module": "A",
+    "strand": "Interdependent Relationships in Ecosystems",
+    "statement": "Use mathematical and/or computational representations to support explanations of factors that affect carrying capacity of ecosystems at different scales."
+  },
+  "3.1.9-12.L": {
+    "module": "A",
+    "strand": "Interdependent Relationships in Ecosystems",
+    "statement": "Use mathematical representations to support and revise explanations based on evidence about factors affecting biodiversity and populations in ecosystems of different scales."
+  },
+  "3.1.9-12.M": {
+    "module": "A",
+    "strand": "Interdependent Relationships in Ecosystems",
+    "statement": "Evaluate the claims, evidence, and reasoning that the complex interactions in ecosystems maintain relatively consistent numbers and types of organisms in stable conditions, but changing conditions may result in a new ecosystem."
+  },
+  "3.1.9-12.D": {
+    "module": "B",
+    "strand": "Inheritance and Variation of Traits",
+    "statement": "Use a model to illustrate the role of cellular division (mitosis) and differentiation in producing and maintaining complex organisms."
+  },
+  "3.1.9-12.P": {
+    "module": "B",
+    "strand": "Inheritance and Variation of Traits",
+    "statement": "Ask questions to clarify relationships about the role of DNA and chromosomes in coding the instructions for characteristic traits passed from parents to offspring."
+  },
+  "3.1.9-12.Q": {
+    "module": "B",
+    "strand": "Inheritance and Variation of Traits",
+    "statement": "Make and defend a claim based on evidence that inheritable genetic variations may result from (1) new genetic combinations through meiosis, (2) viable errors occurring during replication, and/or (3) mutations caused by environmental factors."
+  },
+  "3.1.9-12.R": {
+    "module": "B",
+    "strand": "Inheritance and Variation of Traits",
+    "statement": "Apply concepts of statistics and probability to explain the variation and distribution of expressed traits in a population."
+  },
+  "3.1.9-12.N": {
+    "module": "B",
+    "strand": "Interdependent Relationships in Ecosystems",
+    "statement": "Design, evaluate, and refine a solution for reducing the impacts of human activities on the environment and biodiversity."
+  },
+  "3.1.9-12.O": {
+    "module": "B",
+    "strand": "Interdependent Relationships in Ecosystems",
+    "statement": "Evaluate the evidence for the role of group behavior on individual and species' chances to survive and reproduce."
+  },
+  "3.1.9-12.V": {
+    "module": "B",
+    "strand": "Interdependent Relationships in Ecosystems",
+    "statement": "Create or revise a simulation to test a solution to mitigate adverse impacts of human activity on biodiversity."
+  },
+  "3.1.9-12.S": {
+    "module": "B",
+    "strand": "Natural Selection and Evolution",
+    "statement": "Communicate scientific information that common ancestry and biological evolution are supported by multiple lines of empirical evidence."
+  },
+  "3.1.9-12.T": {
+    "module": "B",
+    "strand": "Natural Selection and Evolution",
+    "statement": "Construct an explanation based on evidence that the process of evolution primarily results from four factors: (1) the potential for a species to increase in number, (2) the heritable genetic variation of individuals in a species due to mutation and sexual reproduction, (3) competition for limited resources, and (4) the proliferation of those organisms that are better able to survive and reproduce in the environment."
+  },
+  "3.1.9-12.U": {
+    "module": "B",
+    "strand": "Natural Selection and Evolution",
+    "statement": "Apply concepts of statistics and probability to support explanations that organisms with an advantageous heritable trait tend to increase in proportion to organisms lacking this trait."
+  },
+  "3.1.9-12.W": {
+    "module": "B",
+    "strand": "Natural Selection and Evolution",
+    "statement": "Construct an explanation based on evidence for how natural selection leads to adaptation of populations."
+  },
+  "3.1.9-12.X": {
+    "module": "B",
+    "strand": "Natural Selection and Evolution",
+    "statement": "Evaluate the evidence supporting claims that changes in environmental conditions may result in (1) increases in the number of individuals of some species, (2) the emergence of new species over time, and (3) the extinction of other species."
+  }
+}

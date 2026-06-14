@@ -1,0 +1,52 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getKCsByStandard } from "@/lib/aig/data";
+import { AIG_METHODS } from "@/lib/aig/pipeline";
+
+export interface AIGGenerateRequest {
+  standardCode: string;
+  methodId: string;
+  model: string;
+  temperature: number;
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body: AIGGenerateRequest = await req.json();
+    const { standardCode, methodId, model, temperature } = body;
+
+    const kcs = getKCsByStandard(standardCode);
+    if (kcs.length === 0) {
+      return NextResponse.json(
+        { error: `Standard not found: ${standardCode}` },
+        { status: 400 }
+      );
+    }
+
+    const method = AIG_METHODS[methodId];
+    if (!method) {
+      return NextResponse.json(
+        { error: `Unknown method: ${methodId}` },
+        { status: 400 }
+      );
+    }
+
+    try {
+      const result = await method.run(standardCode, model, temperature);
+      return NextResponse.json(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message === "Not implemented yet") {
+        return NextResponse.json(
+          { error: `Method "${method.label}" is not implemented yet.` },
+          { status: 501 }
+        );
+      }
+      throw err;
+    }
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Internal server error";
+    console.error("[/api/aig/generate]", err);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
