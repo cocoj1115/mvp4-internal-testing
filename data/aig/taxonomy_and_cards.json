@@ -2,51 +2,63 @@
   "taxonomy": {
     "Recall / Identify / Classify": {
       "definition": "Name, label, retrieve, or categorize a concept, structure, factor, process, or variable.",
-      "scaffolding": "Usually needs concept/vocabulary support."
-    },
-    "Explain Mechanism": {
-      "definition": "Explain how or why a biological process leads to an outcome.",
-      "scaffolding": "Needs causal-link scaffolds."
+      "scaffolding": "Usually needs concept/vocabulary support.",
+      "difficulty": 1
     },
     "Apply Concept": {
       "definition": "Use a known biology idea in a new scenario or organism/context.",
-      "scaffolding": "Needs transfer prompts and concept naming."
-    },
-    "Compare / Contrast": {
-      "definition": "State similarities, differences, or relationships across processes, structures, or cases.",
-      "scaffolding": "Needs parallel comparison frames."
+      "scaffolding": "Needs transfer prompts and concept naming.",
+      "difficulty": 2
     },
     "Data Interpretation": {
       "definition": "Read values, trends, or relationships from a table or numeric data.",
-      "scaffolding": "Needs evidence-reading support."
+      "scaffolding": "Needs evidence-reading support.",
+      "difficulty": 2
     },
     "Graph Interpretation": {
       "definition": "Use axes, trends, slopes, peaks, or comparisons from a graph.",
-      "scaffolding": "Needs graph literacy support."
+      "scaffolding": "Needs graph literacy support.",
+      "difficulty": 2
     },
-    "Prediction": {
-      "definition": "Infer a likely outcome from a pattern, mechanism, or scenario.",
-      "scaffolding": "Needs if-then-because reasoning."
+    "Explain Mechanism": {
+      "definition": "Explain how or why a biological process leads to an outcome.",
+      "scaffolding": "Needs causal-link scaffolds.",
+      "difficulty": 3
     },
-    "Evaluation / Justification": {
-      "definition": "Make a choice, claim, or recommendation and support it with evidence.",
-      "scaffolding": "Needs CER-style scaffolds."
-    },
-    "Experimental Design / Control": {
-      "definition": "Identify or explain variables, controls, setup purpose, measurements, or investigation design.",
-      "scaffolding": "Needs investigation-design language."
-    },
-    "Modeling / Simulation": {
-      "definition": "Interpret, complete, or reason from a model, Punnett square, simulation, or diagram.",
-      "scaffolding": "Needs representation-to-biology mapping."
+    "Compare / Contrast": {
+      "definition": "State similarities, differences, or relationships across processes, structures, or cases.",
+      "scaffolding": "Needs parallel comparison frames.",
+      "difficulty": 3
     },
     "Process Mapping / Representation Completion": {
       "definition": "Complete a structured process chart or explain transformations across steps.",
-      "scaffolding": "Needs step-by-step process support."
+      "scaffolding": "Needs step-by-step process support.",
+      "difficulty": 3
+    },
+    "Prediction": {
+      "definition": "Infer a likely outcome from a pattern, mechanism, or scenario.",
+      "scaffolding": "Needs if-then-because reasoning.",
+      "difficulty": 4
+    },
+    "Experimental Design / Control": {
+      "definition": "Identify or explain variables, controls, setup purpose, measurements, or investigation design.",
+      "scaffolding": "Needs investigation-design language.",
+      "difficulty": 4
+    },
+    "Modeling / Simulation": {
+      "definition": "Interpret, complete, or reason from a model, Punnett square, simulation, or diagram.",
+      "scaffolding": "Needs representation-to-biology mapping.",
+      "difficulty": 4
+    },
+    "Evaluation / Justification": {
+      "definition": "Make a choice, claim, or recommendation and support it with evidence.",
+      "scaffolding": "Needs CER-style scaffolds.",
+      "difficulty": 5
     },
     "Synthesis / Design": {
       "definition": "Propose a valid process, plan, sequence, or design to achieve a biological goal.",
-      "scaffolding": "Needs planning/sequencing scaffolds."
+      "scaffolding": "Needs planning/sequencing scaffolds.",
+      "difficulty": 5
     }
   },
   "cards": [
