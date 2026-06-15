@@ -140,23 +140,41 @@ function ChartAsset({
   );
 }
 
+function sanitizeSVG(svg: string): string {
+  return svg
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/\bon\w+\s*=\s*"[^"]*"/gi, "")
+    .replace(/\bon\w+\s*=\s*'[^']*'/gi, "")
+    .replace(/\bon\w+\s*=[^\s/>]*/gi, "");
+}
+
 function DiagramAsset({ spec, caption }: { spec: string; caption: string }) {
+  const isSVG = spec.trimStart().toLowerCase().startsWith("<svg");
   return (
     <div>
-      <div
-        style={{
-          background: "#f8fafc",
-          border: "1px solid #e2e8f0",
-          borderRadius: 6,
-          padding: 14,
-          fontSize: 13,
-          color: "#374151",
-          whiteSpace: "pre-wrap",
-          fontFamily: "monospace",
-        }}
-      >
-        {spec}
-      </div>
+      {isSVG ? (
+        <div
+          // SVG comes from our own LLM pipeline; script tags are stripped by sanitizeSVG.
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: sanitizeSVG(spec) }}
+          style={{ maxWidth: "100%", overflowX: "auto", lineHeight: 0 }}
+        />
+      ) : (
+        <div
+          style={{
+            background: "#f8fafc",
+            border: "1px solid #e2e8f0",
+            borderRadius: 6,
+            padding: 14,
+            fontSize: 13,
+            color: "#374151",
+            whiteSpace: "pre-wrap",
+            fontFamily: "monospace",
+          }}
+        >
+          {spec}
+        </div>
+      )}
       {caption && <Caption text={caption} />}
     </div>
   );
