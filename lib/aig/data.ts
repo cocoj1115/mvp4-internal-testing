@@ -171,6 +171,49 @@ export function getABCPriors(): ABCPrior[] {
   return result;
 }
 
+// ── Whole-item exemplars ──────────────────────────────────────────────────────
+
+export interface WholeItemPart {
+  part: "A" | "B" | "C";
+  prompt: string;
+  primary_type: string;
+  difficulty: number;
+}
+
+export interface WholeItem {
+  item_id: string;
+  source: string;
+  parts: WholeItemPart[];
+}
+
+export function getWholeItems(): WholeItem[] {
+  const taxonomy = getTaxonomy();
+  const cards = getCards();
+  const byItem = new Map<string, Card[]>();
+  for (const card of cards) {
+    if (!["A", "B", "C"].includes(card.part)) continue;
+    const list = byItem.get(card.item_id) ?? [];
+    list.push(card);
+    byItem.set(card.item_id, list);
+  }
+  const result: WholeItem[] = [];
+  for (const [item_id, itemCards] of Array.from(byItem.entries())) {
+    const sorted = itemCards.sort((a, b) => a.part.localeCompare(b.part));
+    if (sorted.length < 2) continue;
+    result.push({
+      item_id,
+      source: sorted[0].source,
+      parts: sorted.map((c) => ({
+        part: c.part as "A" | "B" | "C",
+        prompt: c.prompt,
+        primary_type: c.primary_type,
+        difficulty: taxonomy[c.primary_type]?.difficulty ?? 0,
+      })),
+    });
+  }
+  return result;
+}
+
 // ── Standards helpers ─────────────────────────────────────────────────────────
 
 function getStandardsInfo(): Record<string, StandardInfo> {

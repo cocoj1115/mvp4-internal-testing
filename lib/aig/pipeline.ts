@@ -29,29 +29,40 @@ export async function assembleContext(standard: string): Promise<ContextPack> {
   const { item_specific: itemRubrics } = getRubrics();
   const standardKCs = getKCsByStandard(standard);
 
-  // Build combined query from all KCs under this standard
-  const combinedQuery = standardKCs.map((kc) => kc.statement).join(". ");
   const combinedVocab = Array.from(new Set(standardKCs.flatMap((kc) => kc.vocab)));
 
-  const studyGuideChunks = await retrieveStudyGuide(combinedQuery, 4, 0.25);
+  // Use vocab terms as query — tighter signal than concatenating all KC statements,
+  // which dilutes the embedding when a standard has many KCs.
+  const studyGuideQuery = combinedVocab.length > 0
+    ? combinedVocab.join(", ")
+    : standardKCs.map((kc) => kc.statement).join(". ");
+
+  const studyGuideChunks = await retrieveStudyGuide(studyGuideQuery, 4, 0.25);
 
   const { getABCPriors } = await import("./data");
   const priors = getABCPriors();
   const priorTypes = new Set(priors.flatMap((p) => p.sequence));
 
+  // Content (vocab) is primary; task-type match is a tiebreaker only.
+  // Cards with zero vocab overlap and no task-type match are excluded entirely.
   const relatedCards: Card[] = allCards
-    .filter(
-      (c) =>
-        priorTypes.has(c.primary_type) ||
-        vocabOverlap(c.prompt, combinedVocab) > 0
-    )
-    .slice(0, 12);
+    .map((c) => ({
+      card: c,
+      score: vocabOverlap(c.prompt, combinedVocab) * 3 + (priorTypes.has(c.primary_type) ? 1 : 0),
+    }))
+    .filter((sc) => sc.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 12)
+    .map((sc) => sc.card);
 
-  const relevantRubrics = itemRubrics.filter(
+  const matched = itemRubrics.filter(
     (r) =>
       r.alignment === standard ||
       vocabOverlap(r.scoring_guideline, combinedVocab) >= 2
   );
+  // Rubric style is domain-general; fall back to all anchors so the model always
+  // has concrete examples to align its bullet format against.
+  const relevantRubrics = matched.length > 0 ? matched : itemRubrics;
 
   const grounding = {
     study_guide: {
@@ -83,7 +94,7 @@ export async function assembleContext(standard: string): Promise<ContextPack> {
 
 const REQUIRED_BP_KEYS = [
   "target_standard",
-  "integrated_kcs",
+  "core_kc",
   "cognitive_demand",
   "key_concepts",
   "task_sequence",
@@ -104,15 +115,22 @@ function validateBlueprint(
     if (!(key in bp)) return `Missing key: ${key}`;
   }
 
-  const integrated = bp.integrated_kcs;
-  if (!Array.isArray(integrated) || integrated.length === 0) {
-    return "integrated_kcs must be a non-empty array";
+  const coreKC = bp.core_kc;
+  if (typeof coreKC !== "string" || !standardKCCodes.includes(coreKC)) {
+    return `core_kc must be a valid KC code under this standard: "${coreKC}"`;
   }
-  for (const code of integrated as string[]) {
-    if (!standardKCCodes.includes(code)) {
-      return `integrated_kcs contains unknown KC code: "${code}"`;
+
+  const supporting = bp.supporting_kcs;
+  if (supporting !== undefined) {
+    if (!Array.isArray(supporting)) return "supporting_kcs must be an array";
+    for (const code of supporting as string[]) {
+      if (!standardKCCodes.includes(code)) {
+        return `supporting_kcs contains unknown KC code: "${code}"`;
+      }
     }
   }
+
+  const validKCCodes = new Set<string>([coreKC, ...((supporting as string[] | undefined) ?? [])]);
 
   const seq = bp.task_sequence as Record<string, { kc_code?: string; task_type?: string } | undefined>;
   if (!seq["Part A"]) return `Missing "Part A" in task_sequence`;
@@ -126,8 +144,8 @@ function validateBlueprint(
     if (!p.task_type || !taxonomyTypes.includes(p.task_type)) {
       return `Invalid or missing task_type for ${part}: "${p.task_type}"`;
     }
-    if (!p.kc_code || !(integrated as string[]).includes(p.kc_code)) {
-      return `Invalid or missing kc_code for ${part}: "${p.kc_code}"`;
+    if (!p.kc_code || !validKCCodes.has(p.kc_code)) {
+      return `Invalid or missing kc_code for ${part}: "${p.kc_code}" (must be core_kc or one of supporting_kcs)`;
     }
   }
 
@@ -170,9 +188,10 @@ function validateItem(parsed: unknown): string | null {
   }
 
   const parts = item.parts as Record<string, unknown>;
-  for (const part of ["Part A", "Part B", "Part C"]) {
+  for (const part of ["Part A", "Part B"]) {
     if (!parts[part]) return `Missing ${part} in parts`;
   }
+  // Part C is optional (2-part items are valid)
   const rubric = item.scoring_rubric as Record<string, unknown>;
   if (!rubric["3"] || !rubric["2"] || !rubric["1"] || !rubric["0"]) {
     return `scoring_rubric must have keys "0", "1", "2", "3"`;
@@ -189,7 +208,15 @@ async function callWithRetry<T>(
   model: string,
   temperature: number
 ): Promise<T> {
-  const call = async (userMsg: string): Promise<unknown> => {
+  const tryParse = (text: string): { value: unknown; error: null } | { value: null; error: string } => {
+    try {
+      return { value: JSON.parse(text), error: null };
+    } catch (e) {
+      return { value: null, error: `Invalid JSON: ${e instanceof Error ? e.message : String(e)}` };
+    }
+  };
+
+  const call = async (userMsg: string): Promise<string> => {
     const res = await chatComplete({
       model,
       temperature,
@@ -199,17 +226,19 @@ async function callWithRetry<T>(
       ],
       jsonMode: true,
     });
-    return JSON.parse(res.content);
+    return res.content;
   };
 
-  const parsed1 = await call(user);
-  const error1 = validate(parsed1);
+  const content1 = await call(user);
+  const { value: parsed1, error: parseErr1 } = tryParse(content1);
+  const error1 = parseErr1 ?? validate(parsed1);
   if (!error1) return parsed1 as T;
 
-  const parsed2 = await call(
-    `${user}\n\nPREVIOUS ATTEMPT FAILED VALIDATION: ${error1}\nPlease fix and return corrected JSON.`
+  const content2 = await call(
+    `${user}\n\nPREVIOUS ATTEMPT FAILED: ${error1}\nPlease fix and return corrected JSON.`
   );
-  const error2 = validate(parsed2);
+  const { value: parsed2, error: parseErr2 } = tryParse(content2);
+  const error2 = parseErr2 ?? validate(parsed2);
   if (!error2) return parsed2 as T;
   throw new Error(`AIG generation failed after retry: ${error2}`);
 }
@@ -276,19 +305,13 @@ export const AIG_METHODS: Record<string, AIGMethod> = {
     },
   },
   method_2: {
-    label: "(placeholder — teammate)",
+    label: "(placeholder)",
     async run() {
       throw new Error("Not implemented yet");
     },
   },
   method_3: {
-    label: "(placeholder — teammate)",
-    async run() {
-      throw new Error("Not implemented yet");
-    },
-  },
-  method_4: {
-    label: "(placeholder — teammate)",
+    label: "(placeholder)",
     async run() {
       throw new Error("Not implemented yet");
     },

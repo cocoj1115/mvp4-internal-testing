@@ -1,5 +1,10 @@
 import type { ContextPack, Blueprint } from "./types";
-import { getABCPriors, getRubrics } from "./data";
+import { getABCPriors, getRubrics, getWholeItems } from "./data";
+
+function vocabOverlap(text: string, vocab: string[]): number {
+  const lower = text.toLowerCase();
+  return vocab.filter((v) => lower.includes(v.toLowerCase())).length;
+}
 
 // ── Blueprint prompt ──────────────────────────────────────────────────────────
 
@@ -9,33 +14,49 @@ export function buildBlueprintPrompt(ctx: ContextPack): {
 } {
   const system = [
     "You are an expert assessment designer for Pennsylvania Keystone Biology.",
-    "Your task is to produce a structured blueprint for a three-part constructed-response item",
-    "that integrates multiple Knowledge Components (KCs) under one STEELS standard.",
+    "Your task is to produce a blueprint for a constructed-response item that explores ONE core",
+    "Knowledge Component (KC) in depth — exactly as real Keystone sample items do.",
     "",
     "INSTRUCTIONS:",
     "1. Review ALL KCs listed under the target standard.",
-    "2. SELECT 2 or 3 KCs that combine naturally into ONE coherent item.",
-    "   Not all KCs need to be used. Choose KCs with complementary cognitive roles",
-    "   that build a logical progression.",
-    "3. Assign each Part (A required, B required, C optional) to exactly ONE selected KC (kc_code).",
-    "   Each Part's task_type must come ONLY from the 12 taxonomy types provided.",
-    "4. Ensure the parts form ONE coherent scenario with escalating cognitive demand,",
-    "   each part targeting its assigned KC.",
-    "5. Determine cognitive_demand from the combined KC statements (Low / Low-Mod / Moderate / High).",
-    "6. key_concepts must come from the KCs' vocab and study-guide grounding — do NOT invent content.",
-    "7. expected_response_elements and common_incomplete_responses must be grounded in the selected KCs",
-    "   and study-guide chunks. Do NOT fabricate biology.",
+    "2. SELECT ONE core KC to explore in depth across all parts (core_kc).",
+    "   Parts A/B/C probe different facets or levels of that SAME core concept — not different topics.",
+    "   You may list 0–2 other KCs from the same standard as supporting_kcs if they provide genuine",
+    "   background context, but do NOT devote a whole part to a separate concept.",
+    "3. Decide part count: default to 3 parts (A, B, C). Use only 2 parts (A, B) only when",
+    "   the core KC does not naturally support a third coherent, non-redundant part.",
+    "4. Assign each part a kc_code. Default all parts to core_kc. A part may use a supporting_kc",
+    "   only if it genuinely deepens the same core concept rather than pivoting to a new topic.",
+    "5. DIFFICULTY RULES (use the difficulty numbers shown with each taxonomy type):",
+    "   - Part A MUST be difficulty 1–2 (low entry point, single convergent answer).",
+    "   - Difficulty must not decrease: difficulty(A) ≤ difficulty(B) ≤ difficulty(C).",
+    "   - At most ONE part may be difficulty 4–5.",
+    "6. SINGLE-FOCUS RULE (critical — applies to every part's function field):",
+    "   - Each part's function must describe EXACTLY ONE thing the student is asked to do.",
+    "   - Part A's function must name a single convergent target: one term, one substance, one structure,",
+    "     one relationship (e.g. 'identify the molecule that carries the anticodon during translation').",
+    "   - Do NOT write a function that chains asks with 'and', 'also', 'as well as', or a comma",
+    "     that introduces a second question.",
+    "   BAD: 'identify what a codon and anticodon are, and name the matching mechanism'",
+    "   GOOD: 'identify the molecule that determines amino-acid order'",
+    "   - Part B / Part C may describe or explain, but still about ONE mechanism or concept in depth.",
+    "   BAD Part B: 'explain how transcription works and how translation differs from it'",
+    "   GOOD Part B: 'explain how the anticodon ensures the correct amino acid is added'",
+    "7. cognitive_demand: Low / Low-Mod / Moderate / High — from the core KC statement.",
+    "8. key_concepts from core_kc vocab + study-guide grounding. Do NOT invent biology.",
+    "9. expected_response_elements and common_incomplete_responses grounded in core_kc and study guide.",
     "",
     "OUTPUT: strict JSON only, no markdown, matching exactly:",
     JSON.stringify({
       target_standard: "<standard code e.g. 3.1.9-12.A>",
-      integrated_kcs: ["<KC code>", "<KC code>"],
+      core_kc: "<one KC code — the single concept explored in depth>",
+      supporting_kcs: ["<optional: other KC codes from same standard used only as background>"],
       cognitive_demand: "<Low | Low-Mod | Moderate | High>",
-      key_concepts: ["<concept from selected KCs' vocab/study guide>"],
+      key_concepts: ["<concept from core_kc vocab/study guide>"],
       task_sequence: {
-        "Part A": { kc_code: "<one of integrated_kcs>", task_type: "<one of the 12 taxonomy types>", function: "<what this part tests>" },
-        "Part B": { kc_code: "<one of integrated_kcs>", task_type: "<one of the 12 taxonomy types>", function: "<what this part tests>" },
-        "Part C": { kc_code: "<one of integrated_kcs>", task_type: "<one of the 12 taxonomy types>", function: "<what this part tests>" },
+        "Part A": { kc_code: "<core_kc or supporting_kc>", task_type: "<difficulty 1-2 type>", function: "<ONE single-focus target — one term/substance/structure>" },
+        "Part B": { kc_code: "<core_kc or supporting_kc>", task_type: "<difficulty ≥ Part A>", function: "<ONE mechanism or relationship — no 'and' chaining>" },
+        "Part C": { kc_code: "<core_kc or supporting_kc>", task_type: "<difficulty ≥ Part B>", function: "<ONE evaluation, prediction, or synthesis point>" },
       },
       evidence_pattern: "<type of stimulus or evidence the item will use>",
       expected_response_elements: ["<specific element students must include>"],
@@ -51,26 +72,38 @@ export function buildBlueprintPrompt(ctx: ContextPack): {
     .join("\n");
 
   const taxonomySection = Object.entries(ctx.taxonomyRows)
+    .sort(([, a], [, b]) => a.difficulty - b.difficulty)
     .map(([name, entry]) =>
-      `TYPE: ${name}\nDefinition: ${entry.definition}\nScaffolding: ${entry.scaffolding}`
+      `TYPE: ${name} [difficulty ${entry.difficulty}]\nDefinition: ${entry.definition}\nScaffolding: ${entry.scaffolding}`
     )
     .join("\n\n");
 
   const priors = getABCPriors();
   const priorSeqSection = priors
-    .map(
-      (p) =>
-        `${p.item}: ${p.sequence.map((t, i) => `${["A", "B", "C"][i]}=${t}`).join(" → ")}`
-    )
+    .map((p) => {
+      const diffLabels = p.sequence.map((t) => {
+        const d = ctx.taxonomyRows[t]?.difficulty ?? "?";
+        return `${t} [d${d}]`;
+      });
+      return `${p.item}: A=${diffLabels[0] ?? "?"} → B=${diffLabels[1] ?? "?"} → C=${diffLabels[2] ?? "—"}`;
+    })
     .join("\n");
 
-  const priorSection = ctx.relatedCards
-    .map((c) =>
+  // Whole-item exemplars: show top-5 by vocab overlap so model sees full A→B→C depth on one concept
+  const combinedVocab = ctx.standardKCs.flatMap((kc) => kc.vocab);
+  const wholeItemSection = getWholeItems()
+    .map((item) => ({
+      item,
+      score: item.parts.reduce((s, p) => s + vocabOverlap(p.prompt, combinedVocab), 0),
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5)
+    .map(({ item }) =>
       [
-        `Card ${c.card_id} | Part ${c.part} | item: ${c.item_id}`,
-        `primary_type: ${c.primary_type} | secondary_type: ${c.secondary_type}`,
-        `evidence_demand: ${c.evidence_demand} | cognitive_demand: ${c.cognitive_demand || "—"}`,
-        `Prompt: ${c.prompt}`,
+        `ITEM ${item.item_id} (${item.source}):`,
+        ...item.parts.map(
+          (p) => `  Part ${p.part} [${p.primary_type} d${p.difficulty}]: ${p.prompt}`
+        ),
       ].join("\n")
     )
     .join("\n---\n");
@@ -94,8 +127,8 @@ export function buildBlueprintPrompt(ctx: ContextPack): {
     "=== OBSERVED A/B/C SEQUENCES (use as prior, not fixed) ===",
     priorSeqSection || "(none)",
     "",
-    "=== SIMILAR ITEM CARDS (reference for task type and evidence demand) ===",
-    priorSection || "(none)",
+    "=== WHOLE-ITEM EXEMPLARS (observe how each real item stays on one concept and escalates difficulty) ===",
+    wholeItemSection || "(none)",
     "",
     "=== STUDY-GUIDE GROUNDING (use to ground key_concepts and expected elements) ===",
     studyGuideSection,
@@ -113,9 +146,38 @@ export function buildItemPrompt(
   ctx: ContextPack,
   telerLevel: number = 3
 ): { system: string; user: string } {
+  const partCount = (["Part A", "Part B", "Part C"] as const).filter(
+    (p) => bp.task_sequence[p]
+  ).length;
+
+  const partSchema: Record<string, { task_type: string; question: string }> = {
+    "Part A": { task_type: "<from blueprint>", question: "<student-facing question>" },
+    "Part B": { task_type: "<from blueprint>", question: "<student-facing question>" },
+  };
+  if (bp.task_sequence["Part C"]) {
+    partSchema["Part C"] = { task_type: "<from blueprint>", question: "<student-facing question>" };
+  }
+
+  const rubricTemplate =
+    partCount === 2
+      ? {
+          points_possible: 3,
+          "3": "Thorough — BOTH: [bullet A] AND [bullet B]",
+          "2": "Partial — fulfilling ONE of the two bullets",
+          "1": "Minimal — partially addressing one bullet",
+          "0": "Insufficient evidence",
+        }
+      : {
+          points_possible: 3,
+          "3": "Thorough — by ALL of: [bullet A] AND [bullet B] AND [bullet C]",
+          "2": "Partial — fulfilling TWO of the bullets",
+          "1": "Minimal — fulfilling ONE of the bullets",
+          "0": "Insufficient evidence",
+        };
+
   const system = [
     "You are an expert item writer for Pennsylvania Keystone Biology Keystone exams.",
-    "Generate a complete three-part constructed-response item from the provided blueprint.",
+    `Generate a ${partCount}-part constructed-response item from the provided blueprint.`,
     "",
     "ITEM WRITING RULES:",
     "1. Stem must set the biological context without giving away the answers.",
@@ -128,11 +190,26 @@ export function buildItemPrompt(
     "   - 'none': purely textual item, no visual asset needed",
     "   Always set caption (1-2 sentences describing the asset, even for 'none').",
     "   Only populate the field matching the type; leave others absent.",
-    "3. Each part question must match its task_type and target the KC assigned in the blueprint (kc_code).",
-    "4. Write ONE holistic 0-3 rubric for the whole item. The 3-point level lists three bullets (one per",
-    "   part) joined by AND; 2 = two bullets; 1 = one bullet; 0 = insufficient. Match the exact style of the anchors.",
-    "5. Do NOT reveal expected answers in the stem, stimulus asset, or part questions.",
-    "6. Ground all scientific content in the study-guide chunks and key concepts provided.",
+    "3. SINGLE-FOCUS RULE (critical — strictly enforced):",
+    "   Each part asks for EXACTLY ONE thing. The student's answer converges on a single concept,",
+    "   term, mechanism, or relationship. Do NOT chain sub-questions with 'and', 'also',",
+    "   'as well as', or commas that introduce a second question.",
+    "   - Part A must have a single convergent answer (one term / one substance / one structure).",
+    "     BAD: 'Identify what a codon and an anticodon are, and name the mechanism that allows",
+    "           tRNA to match the mRNA codon.' (three asks)",
+    "     GOOD: 'Identify the type of molecule that carries the anticodon during translation.'",
+    "   - Part B / Part C may use 'describe', 'explain', or 'give an example', but still about",
+    "     ONE core point. Describing one mechanism in depth is fine; asking about two different",
+    "     mechanisms in one part is not.",
+    "     BAD Part B: 'Explain how transcription works and how translation differs from it.'",
+    "     GOOD Part B: 'Explain how the anticodon ensures the correct amino acid is added.'",
+    "   Each part probes a different facet of the SAME core concept — do not pivot topics.",
+    "4. Each part question must match its task_type and target the KC assigned in the blueprint (kc_code).",
+    `5. Write ONE holistic 0-3 rubric for the whole item. The 3-point level lists ${partCount} bullets`,
+    `   (one per part) joined by AND; 2 = ${partCount === 2 ? "ONE bullet (partial)" : "two bullets"}; 1 = ${partCount === 2 ? "partially addresses one bullet" : "one bullet"}; 0 = insufficient.`,
+    "   Match the exact style of the anchors.",
+    "6. Do NOT reveal expected answers in the stem, stimulus asset, or part questions.",
+    "7. Ground all scientific content in the study-guide chunks and key concepts provided.",
     "   Do NOT invent biology outside those sources.",
     "",
     "OUTPUT: strict JSON only, no markdown wrapper, matching exactly:",
@@ -148,20 +225,10 @@ export function buildItemPrompt(
           series: [{ name: "<series name>", points: [["<x>", "<y>"]] }],
         },
         diagram_spec: "<textual description of diagram — only when type=diagram, else omit>",
-        illustration_prompt: "<DALL-E prompt string — only when type=illustration, else omit>",
+        illustration_prompt: "<image-generation prompt string — only when type=illustration, else omit>",
       },
-      parts: {
-        "Part A": { task_type: "<from blueprint>", question: "<student-facing question>" },
-        "Part B": { task_type: "<from blueprint>", question: "<student-facing question>" },
-        "Part C": { task_type: "<from blueprint>", question: "<student-facing question>" },
-      },
-      scoring_rubric: {
-        points_possible: 3,
-        "3": "Thorough — by ALL of: [bullet A] AND [bullet B] AND [bullet C]",
-        "2": "Partial — fulfilling TWO of the bullets",
-        "1": "Minimal — fulfilling ONE of the bullets",
-        "0": "Insufficient evidence",
-      },
+      parts: partSchema,
+      scoring_rubric: rubricTemplate,
     }),
   ].join("\n");
 
