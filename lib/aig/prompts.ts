@@ -27,7 +27,9 @@ export function buildBlueprintPrompt(ctx: ContextPack): {
     "   the core KC does not naturally support a third coherent, non-redundant part.",
     "4. Assign each part a kc_code. Default all parts to core_kc. A part may use a supporting_kc",
     "   only if it genuinely deepens the same core concept rather than pivoting to a new topic.",
-    "5. DIFFICULTY RULES (use the difficulty numbers shown with each taxonomy type):",
+    "5. DIFFICULTY RULES (use the Difficulty numbers shown per taxonomy type):",
+    "   - task_type must be the exact TYPE name (e.g. 'Recall / Identify / Classify') — do NOT",
+    "     append the difficulty number or any other text to the task_type value.",
     "   - Part A MUST be difficulty 1–2 (low entry point, single convergent answer).",
     "   - Difficulty must not decrease: difficulty(A) ≤ difficulty(B) ≤ difficulty(C).",
     "   - At most ONE part may be difficulty 4–5.",
@@ -54,9 +56,9 @@ export function buildBlueprintPrompt(ctx: ContextPack): {
       cognitive_demand: "<Low | Low-Mod | Moderate | High>",
       key_concepts: ["<concept from core_kc vocab/study guide>"],
       task_sequence: {
-        "Part A": { kc_code: "<core_kc or supporting_kc>", task_type: "<difficulty 1-2 type>", function: "<ONE single-focus target — one term/substance/structure>" },
-        "Part B": { kc_code: "<core_kc or supporting_kc>", task_type: "<difficulty ≥ Part A>", function: "<ONE mechanism or relationship — no 'and' chaining>" },
-        "Part C": { kc_code: "<core_kc or supporting_kc>", task_type: "<difficulty ≥ Part B>", function: "<ONE evaluation, prediction, or synthesis point>" },
+        "Part A": { kc_code: "<core_kc or supporting_kc>", task_type: "<exact TYPE name, difficulty 1–2, no annotation>", function: "<ONE single-focus target — one term/substance/structure>" },
+        "Part B": { kc_code: "<core_kc or supporting_kc>", task_type: "<exact TYPE name, difficulty ≥ Part A, no annotation>", function: "<ONE mechanism or relationship — no 'and' chaining>" },
+        "Part C": { kc_code: "<core_kc or supporting_kc>", task_type: "<exact TYPE name, difficulty ≥ Part B, no annotation>", function: "<ONE evaluation, prediction, or synthesis point>" },
       },
       evidence_pattern: "<type of stimulus or evidence the item will use>",
       expected_response_elements: ["<specific element students must include>"],
@@ -74,7 +76,7 @@ export function buildBlueprintPrompt(ctx: ContextPack): {
   const taxonomySection = Object.entries(ctx.taxonomyRows)
     .sort(([, a], [, b]) => a.difficulty - b.difficulty)
     .map(([name, entry]) =>
-      `TYPE: ${name} [difficulty ${entry.difficulty}]\nDefinition: ${entry.definition}\nScaffolding: ${entry.scaffolding}`
+      `TYPE: ${name}\nDifficulty: ${entry.difficulty}\nDefinition: ${entry.definition}\nScaffolding: ${entry.scaffolding}`
     )
     .join("\n\n");
 
