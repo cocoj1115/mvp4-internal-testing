@@ -208,6 +208,43 @@ function validateItem(parsed: unknown): string | null {
   return null;
 }
 
+function validateDirectItemKCSelection(
+  parsed: unknown,
+  targetStandard: string,
+  standardKCCodes: string[]
+): string | null {
+  const baseError = validateItem(parsed);
+  if (baseError) return baseError;
+
+  const item = parsed as Record<string, unknown>;
+
+  if (item.target_standard !== undefined) {
+    if (typeof item.target_standard !== "string" || item.target_standard !== targetStandard) {
+      return `target_standard must exactly match the requested standard: "${targetStandard}"`;
+    }
+  }
+
+  const coreKC = item.core_kc;
+  if (typeof coreKC !== "string" || !standardKCCodes.includes(coreKC)) {
+    return `core_kc must be a valid KC code under this standard: "${coreKC}"`;
+  }
+
+  const supporting = item.supporting_kcs;
+  if (supporting !== undefined) {
+    if (!Array.isArray(supporting)) return "supporting_kcs must be an array";
+    for (const code of supporting as unknown[]) {
+      if (typeof code !== "string" || !standardKCCodes.includes(code)) {
+        return `supporting_kcs contains unknown KC code: "${String(code)}"`;
+      }
+      if (code === coreKC) {
+        return "supporting_kcs must not repeat core_kc";
+      }
+    }
+  }
+
+  return null;
+}
+
 // ── LLM call with 1 retry ─────────────────────────────────────────────────────
 
 async function callWithRetry<T>(
@@ -306,7 +343,7 @@ export async function generateKeystoneDirectItem(
   return callWithRetry<GeneratedItem>(
     system,
     user,
-    validateItem,
+    (parsed) => validateDirectItemKCSelection(parsed, standard, standardKCs.map((kc) => kc.code)),
     model,
     temperature
   );

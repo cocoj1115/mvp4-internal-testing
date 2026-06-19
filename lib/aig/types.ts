@@ -125,6 +125,9 @@ export interface StimulusAsset {
 }
 
 export interface GeneratedItem {
+  target_standard?: string;
+  core_kc?: string;
+  supporting_kcs?: string[];
   stem: string;
   stimulus_asset: StimulusAsset;
   parts: {

@@ -822,6 +822,30 @@ export default function AIGPage() {
               </Section>
             )}
 
+            {!result.blueprint && result.item.core_kc && (
+              <Section title="KC Selection" accent>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 0,
+                  }}
+                >
+                  <Field
+                    label="Target Standard"
+                    value={result.item.target_standard ?? selectedStandard?.standard ?? standardCode}
+                  />
+                  <Field label="Core KC" value={result.item.core_kc} />
+                </div>
+                {result.item.supporting_kcs && result.item.supporting_kcs.length > 0 && (
+                  <Field
+                    label="Supporting KCs"
+                    value={result.item.supporting_kcs.join(" · ")}
+                  />
+                )}
+              </Section>
+            )}
+
             {/* Blueprint */}
             {result.blueprint && (
               <Section title="Blueprint" accent>

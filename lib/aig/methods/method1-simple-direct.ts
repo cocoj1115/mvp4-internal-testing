@@ -107,6 +107,9 @@ export function buildKeystoneDirectPrompt(
   const vocab = Array.from(new Set(ctx.standardKCs.flatMap((kc) => kc.vocab))).join(", ");
 
   const schema = {
+    target_standard: "<same PA STEELS standard code provided in the request>",
+    core_kc: "<ONE KC code selected as the primary concept focus for this item>",
+    supporting_kcs: ["<optional additional KC codes from the same standard used as support/background>"],
     stem: "<brief setup sentence(s) that introduce the task without giving away answers>",
     stimulus_asset: {
       type: "<table|line_graph|bar_chart|diagram|scenario|illustration|none>",
@@ -143,6 +146,12 @@ export function buildKeystoneDirectPrompt(
     "Generate ONE Pennsylvania Keystone Biology short-answer question aligned to:",
     `PA STEELS Standard: ${ctx.standard}`,
     `Module: ${moduleCode}`,
+    "",
+    "Before writing the item, choose the KC focus explicitly:",
+    "  - Select EXACTLY ONE core_kc from the KCs listed below as the primary assessed concept.",
+    "  - You may include 0-2 supporting_kcs from the same standard if they genuinely support the item.",
+    "  - Return the selected KC code(s) in the JSON output.",
+    "  - Keep the item mainly focused on the selected core_kc.",
     "",
     "Knowledge Components in scope:",
     kcLines,
