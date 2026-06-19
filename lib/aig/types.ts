@@ -110,7 +110,7 @@ export type StimulusAssetType =
 
 export interface StimulusAsset {
   type: StimulusAssetType;
-  caption: string;
+  title: string;
   table_markdown?: string;
   chart_data?: {
     x_label: string;

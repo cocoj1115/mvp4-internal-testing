@@ -110,7 +110,7 @@ export function buildKeystoneDirectPrompt(
     stem: "<brief setup sentence(s) that introduce the task without giving away answers>",
     stimulus_asset: {
       type: "<table|line_graph|bar_chart|diagram|scenario|illustration|none>",
-      caption: "<1-2 sentence description of the stimulus>",
+      title: "<short Keystone-style figure title, 2-8 words>",
       table_markdown: "<only when type=table>",
       chart_data: {
         x_label: "<axis label>",
@@ -151,9 +151,18 @@ export function buildKeystoneDirectPrompt(
     "",
     `Required Stimulus: ${options.stimulusType === "auto" ? "AUTO" : notebookStimulusLabel(options.stimulusType)}`,
     `Stimulus constraint: ${forcedStimulusInstruction(options)}`,
+    "For every stimulus type except 'none', provide a short stimulus_asset.title in Keystone style.",
+    "The title should be a concise noun phrase such as 'Heart Rate of a Black Bear', 'Seed Production', or 'Investigation Setup'.",
+    "Visual style for all stimuli must match Pennsylvania Keystone exam figures:",
+    "  - black, white, and gray only; no color",
+    "  - clean textbook/worksheet look",
+    "  - no decorative gradients, shadows, or artistic backgrounds",
+    "  - simple labels and high contrast",
     "If type='diagram', diagram_spec MUST be a complete inline SVG string, not prose.",
     "For diagram SVG output:",
     "  - Start with <svg width='540' height='320' xmlns='http://www.w3.org/2000/svg'>.",
+    "  - Do NOT include the title text inside the SVG; the app renders the title above the figure.",
+    "  - Use black, white, and gray only. No colored fills or colored strokes.",
     "  - Use only simple shapes: <rect>, <circle>, <ellipse>, <line>, <path>, <polygon>, <text>, <tspan>, <marker>.",
     "  - Add a clear viewBox-compatible layout within x in [10,530] and y in [10,310].",
     "  - Keep nodes at least 80px apart center-to-center.",
@@ -164,6 +173,10 @@ export function buildKeystoneDirectPrompt(
     "  - Do NOT include free-floating annotation text unless it is placed outside the main shape and does not overlap any label.",
     "  - Do NOT include markdown fences, explanations, or any text before/after the SVG markup.",
     "If type='illustration', write a precise image generation prompt in illustration_prompt. The app will automatically send that prompt to the image generation model.",
+    "  - The illustration must look like a Keystone exam figure: black-and-white textbook diagram, plain white background, minimal shading, no color.",
+    "  - Do NOT include a title inside the generated image; the app renders the title above the figure.",
+    "If type='line_graph' or type='bar_chart', the data should support a monochrome graph with a single clear title and simple axis labels.",
+    "If type='table', choose short column headers and values that fit a plain black-and-white worksheet table.",
     options.revisionInstructions
       ? `\nREVISION REQUIRED - PREVIOUS ATTEMPT FAILED STYLE CHECK\n${options.revisionInstructions}`
       : "",

@@ -79,6 +79,18 @@ const UNIQUE_MODELS = Array.from(
 
 const TEMPERATURES = [0, 0.5, 1] as const;
 
+function getAllowedTemperatures(modelId: string): ReadonlyArray<(typeof TEMPERATURES)[number]> {
+  const temps = Array.from(
+    new Set(
+      COMPARE_MODEL_CONFIGS.filter((config) => config.modelId === modelId).map(
+        (config) => config.temperature as (typeof TEMPERATURES)[number]
+      )
+    )
+  ).sort((a, b) => a - b);
+
+  return temps.length > 0 ? temps : TEMPERATURES;
+}
+
 const STIMULUS_TYPES: Array<{ id: AIGStimulusType; label: string }> = [
   { id: "auto", label: "Auto" },
   { id: "table", label: "Data Table" },
@@ -434,6 +446,7 @@ export default function AIGPage() {
   const [error, setError] = useState<string | null>(null);
   const stepTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const activeProgressSteps = useRef<ProgressStep[]>(runProgressSteps);
+  const allowedTemperatures = getAllowedTemperatures(modelId);
 
   useEffect(() => {
     fetch("/api/aig/standards")
@@ -444,6 +457,12 @@ export default function AIGPage() {
       })
       .catch(() => setError("Failed to load standards list."));
   }, []);
+
+  useEffect(() => {
+    if (!allowedTemperatures.includes(temperature)) {
+      setTemperature(allowedTemperatures[0] ?? 1);
+    }
+  }, [allowedTemperatures, temperature]);
 
   function startStepAnimation() {
     stepTimers.current.forEach(clearTimeout);
@@ -631,14 +650,14 @@ export default function AIGPage() {
             </div>
 
             <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>
-                Temperature
-              </label>
-              <div style={{ display: "flex", gap: 8 }}>
-                {TEMPERATURES.map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setTemperature(t)}
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>
+                  Temperature
+                </label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {allowedTemperatures.map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setTemperature(t)}
                     style={{
                       flex: 1,
                       padding: "8px 0",
@@ -681,38 +700,40 @@ export default function AIGPage() {
               <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>
                 Style Check
               </label>
-              <label style={checkboxLabelStyle}>
-                <input
-                  type="checkbox"
-                  checked={styleCheckEnabled}
-                  onChange={(e) => {
-                    setStyleCheckEnabled(e.target.checked);
-                    if (!e.target.checked) setRetryEnabled(false);
-                  }}
-                />
-                Run style check
-              </label>
-              <label style={{ ...checkboxLabelStyle, opacity: styleCheckEnabled ? 1 : 0.5 }}>
-                <input
-                  type="checkbox"
-                  checked={retryEnabled}
-                  disabled={!styleCheckEnabled}
-                  onChange={(e) => setRetryEnabled(e.target.checked)}
-                />
-                Retry on failure
-              </label>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
-                <span style={{ fontSize: 12, color: "#6b7280" }}>Max attempts</span>
-                <select
-                  value={maxAttempts}
-                  disabled={!styleCheckEnabled || !retryEnabled}
-                  onChange={(e) => setMaxAttempts(Number(e.target.value))}
-                  style={{ ...selectStyle, width: 76, padding: "5px 8px" }}
-                >
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <option key={n} value={n}>{n}</option>
-                  ))}
-                </select>
+              <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                <label style={{ ...checkboxLabelStyle, marginBottom: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={styleCheckEnabled}
+                    onChange={(e) => {
+                      setStyleCheckEnabled(e.target.checked);
+                      if (!e.target.checked) setRetryEnabled(false);
+                    }}
+                  />
+                  Run style check
+                </label>
+                <label style={{ ...checkboxLabelStyle, opacity: styleCheckEnabled ? 1 : 0.5, marginBottom: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={retryEnabled}
+                    disabled={!styleCheckEnabled}
+                    onChange={(e) => setRetryEnabled(e.target.checked)}
+                  />
+                  Retry on failure
+                </label>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, opacity: styleCheckEnabled && retryEnabled ? 1 : 0.6 }}>
+                  <span style={{ fontSize: 12, color: "#6b7280", whiteSpace: "nowrap" }}>Max attempts</span>
+                  <select
+                    value={maxAttempts}
+                    disabled={!styleCheckEnabled || !retryEnabled}
+                    onChange={(e) => setMaxAttempts(Number(e.target.value))}
+                    style={{ ...selectStyle, width: 76, padding: "5px 8px" }}
+                  >
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <option key={n} value={n}>{n}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
           </div>

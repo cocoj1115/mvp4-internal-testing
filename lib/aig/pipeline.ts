@@ -177,7 +177,9 @@ function validateItem(parsed: unknown): string | null {
   if (typeof asset.type !== "string" || !VALID_STIMULUS_TYPES.has(asset.type)) {
     return `stimulus_asset.type must be one of: ${Array.from(VALID_STIMULUS_TYPES).join(", ")}`;
   }
-  if (typeof asset.caption !== "string") return "stimulus_asset.caption must be a string";
+  if (typeof asset.title !== "string" || !asset.title.trim()) {
+    return "stimulus_asset.title must be a non-empty string";
+  }
   if (asset.type === "table" && typeof asset.table_markdown !== "string") {
     return "stimulus_asset.table_markdown required when type=table";
   }
