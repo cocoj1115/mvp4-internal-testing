@@ -2,7 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { COMPARE_MODEL_CONFIGS } from "@/lib/compare/models";
-import type { Blueprint, GeneratedItem } from "@/lib/aig/types";
+import type {
+  AIGStimulusType,
+  Blueprint,
+  GeneratedItem,
+  StyleCheckResult,
+} from "@/lib/aig/types";
 import { StimulusAsset } from "./StimulusAsset";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -20,21 +25,48 @@ interface MethodOption {
   label: string;
 }
 
+interface ProgressStep {
+  id: string;
+  label: string;
+  detail: string;
+}
+
 interface GenerateResult {
-  blueprint: Blueprint;
+  blueprint?: Blueprint;
   item: GeneratedItem;
   grounding: {
     study_guide: { empty: boolean; chunk_ids: string[] };
     rubric: { empty: boolean; items: string[] };
     cards: { empty: boolean; card_ids: string[] };
   };
+  style_check?: StyleCheckResult;
+  attempts?: Array<{
+    attempt: number;
+    item: GeneratedItem;
+    blueprint?: Blueprint;
+    style_check?: StyleCheckResult;
+    revision_instructions?: string;
+  }>;
+  metadata?: {
+    style_check_enabled: boolean;
+    retry_enabled: boolean;
+    max_attempts: number;
+    attempts: number;
+    final_status: "not_checked" | "passed" | "failed" | "max_attempts_reached";
+  };
+}
+
+interface ResultContext {
+  methodId: string;
+  methodLabel: string;
+  stimulusType: AIGStimulusType;
 }
 
 // ── Static method list (labels mirrored from registry) ────────────────────────
 
 const METHODS: MethodOption[] = [
-  { id: "method_blueprint_l3", label: "Blueprint + TELeR L3" },
-  { id: "method_2", label: "(placeholder — teammate)" },
+  { id: "method_simple_direct", label: "Method 1: Simple Direct" },
+  { id: "method_blueprint_l3", label: "Method 2: Blueprint + TELeR L3" },
   { id: "method_3", label: "(placeholder — teammate)" },
   { id: "method_4", label: "(placeholder — teammate)" },
 ];
@@ -46,6 +78,17 @@ const UNIQUE_MODELS = Array.from(
 );
 
 const TEMPERATURES = [0, 0.5, 1] as const;
+
+const STIMULUS_TYPES: Array<{ id: AIGStimulusType; label: string }> = [
+  { id: "auto", label: "Auto" },
+  { id: "table", label: "Data Table" },
+  { id: "line_graph", label: "Line Graph" },
+  { id: "bar_chart", label: "Bar Graph" },
+  { id: "scenario", label: "Scenario" },
+  { id: "diagram", label: "Diagram Spec (text-only)" },
+  { id: "illustration", label: "Illustration" },
+  { id: "none", label: "None" },
+];
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -65,6 +108,9 @@ function Section({
         borderRadius: 8,
         marginBottom: 20,
         overflow: "hidden",
+        background: "#fff",
+        color: "#111827",
+        colorScheme: "light",
       }}
     >
       <div
@@ -79,7 +125,7 @@ function Section({
       >
         {title}
       </div>
-      <div style={{ padding: 16 }}>{children}</div>
+      <div style={{ padding: 16, background: "#fff", color: "#111827", colorScheme: "light" }}>{children}</div>
     </div>
   );
 }
@@ -149,25 +195,157 @@ function GroundingBadge({
   );
 }
 
+function StyleCheckPanel({ result }: { result: GenerateResult }) {
+  const check = result.style_check;
+  const metadata = result.metadata;
+  if (!metadata || !metadata.style_check_enabled || !check) {
+    return (
+      <div style={{ fontSize: 13, color: "#6b7280" }}>
+        Style check was not run.
+      </div>
+    );
+  }
+
+  const rows = Object.entries(check.criteria_results);
+  const passesAllCriteria = rows.every(([, details]) => details.pass);
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+        <span style={pillStyle(passesAllCriteria ? "pass" : "fail")}>
+          {passesAllCriteria ? "Passed" : "Failed"}
+        </span>
+        <span style={pillStyle("neutral")}>
+          Attempts: {metadata.attempts}/{metadata.max_attempts}
+        </span>
+        <span style={pillStyle("neutral")}>
+          Retry: {metadata.retry_enabled ? "On" : "Off"}
+        </span>
+        <span style={pillStyle("neutral")}>
+          Status: {metadata.final_status}
+        </span>
+      </div>
+      <div style={{ border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" }}>
+        {rows.map(([name, details]) => (
+          <div
+            key={name}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "170px 72px 1fr",
+              gap: 10,
+              padding: "9px 12px",
+              borderBottom: name === rows[rows.length - 1][0] ? "none" : "1px solid #e2e8f0",
+              background: details.pass ? "#fff" : "#fef2f2",
+              fontSize: 12,
+            }}
+          >
+            <strong style={{ color: "#374151" }}>{name.replaceAll("_", " ")}</strong>
+            <span style={{ color: details.pass ? "#15803d" : "#b91c1c", fontWeight: 700 }}>
+              {details.pass ? "PASS" : "FAIL"}
+            </span>
+            <span style={{ color: details.flag ? "#7f1d1d" : "#6b7280" }}>
+              {details.flag ?? "—"}
+            </span>
+          </div>
+        ))}
+      </div>
+      {check.revision_instructions && (
+        <Field label="Revision Instructions" value={check.revision_instructions} />
+      )}
+    </div>
+  );
+}
+
 // ── Progress steps ────────────────────────────────────────────────────────────
 
-const STEPS = [
-  { id: "context", label: "Retrieving context", detail: "Embedding KC statement · cosine search over 129 study-guide chunks · matching cards" },
-  { id: "blueprint", label: "Generating blueprint", detail: "LLM call 1 — picks task types, cognitive demand, evidence pattern from taxonomy" },
-  { id: "item", label: "Generating item", detail: "LLM call 2 (TELeR L3) — writes stem, parts A/B/C, rubric, annotated examples" },
-  { id: "done", label: "Done", detail: "" },
-];
+function getProgressSteps(
+  methodId: string,
+  styleCheckEnabled: boolean,
+  retryEnabled: boolean,
+  stimulusType: AIGStimulusType
+): ProgressStep[] {
+  const steps: ProgressStep[] = methodId === "method_simple_direct"
+    ? [
+        {
+          id: "prompt",
+          label: "Preparing prompt",
+          detail: "Loading Keystone generation rules, KC information, vocabulary, and exemplars",
+        },
+        {
+          id: "item",
+          label: "Generating item",
+          detail: "LLM call — writes the stimulus, Part A/B/C, and scoring rubric directly",
+        },
+      ]
+    : [
+        {
+          id: "context",
+          label: "Retrieving context",
+          detail: "Embedding the selected standard/KCs and retrieving matching study guide, rubric, and card evidence",
+        },
+        {
+          id: "blueprint",
+          label: "Generating blueprint",
+          detail: "LLM call 1 — plans task types, cognitive demand, evidence pattern, and response targets",
+        },
+        {
+          id: "item",
+          label: "Generating item",
+          detail: "LLM call 2 — writes stem, stimulus, Part A/B/C, rubric, and annotated examples from the blueprint",
+        },
+      ];
 
-// Rough expected durations per step (ms) — used only for animation pacing
-const STEP_DURATIONS = [4000, 12000, 18000];
+  if (stimulusType === "illustration") {
+    steps.push({
+      id: "illustration",
+      label: "Generating image",
+      detail: "Image API call — creates the illustration from the LLM-generated illustration prompt",
+    });
+  }
 
-function ProgressBar({ step }: { step: number }) {
-  const pct = Math.min(100, Math.round((step / (STEPS.length - 1)) * 100));
+  if (styleCheckEnabled) {
+    steps.push({
+      id: "style-check",
+      label: retryEnabled ? "Checking/retrying" : "Style checking",
+      detail: retryEnabled
+        ? "Reviewer checks item quality and may request a revised generation attempt"
+        : "Reviewer checks stimulus quality, DOK progression, Keystone style, and standard alignment",
+    });
+  }
+
+  steps.push({ id: "done", label: "Done", detail: "" });
+  return steps;
+}
+
+function getStepDurations(steps: ProgressStep[]) {
+  return steps.slice(0, -1).map((s) => {
+    if (s.id === "prompt") return 2500;
+    if (s.id === "context") return 4000;
+    if (s.id === "blueprint") return 9000;
+    if (s.id === "illustration") return 15000;
+    if (s.id === "style-check") return 9000;
+    return 14000;
+  });
+}
+
+function hasGroundingMatches(grounding: GenerateResult["grounding"]) {
+  return !grounding.study_guide.empty || !grounding.rubric.empty || !grounding.cards.empty;
+}
+
+function ProgressBar({ step, steps }: { step: number; steps: ProgressStep[] }) {
+  const pct = Math.min(100, Math.round((step / (steps.length - 1)) * 100));
+  const doneIndex = steps.length - 1;
   return (
     <div style={{ marginBottom: 20 }}>
+      <style jsx>{`
+        @keyframes aig-spin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+      `}</style>
       {/* Step labels */}
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-        {STEPS.map((s, i) => (
+        {steps.map((s, i) => (
           <div
             key={s.id}
             style={{
@@ -179,8 +357,34 @@ function ProgressBar({ step }: { step: number }) {
               transition: "color 0.3s",
             }}
           >
-            <div style={{ marginBottom: 3 }}>
-              {i < step ? "✓" : i === step ? "⟳" : "○"}
+            <div style={{ height: 16, marginBottom: 3, display: "flex", justifyContent: "center" }}>
+              {i < step || (i === doneIndex && step === doneIndex) ? (
+                <span style={{ color: "#15803d", fontWeight: 800, lineHeight: "16px" }}>✓</span>
+              ) : i === step ? (
+                <span
+                  aria-label="Loading"
+                  style={{
+                    width: 13,
+                    height: 13,
+                    border: "2px solid #c7d2fe",
+                    borderTopColor: "#4f46e5",
+                    borderRadius: "50%",
+                    animation: "aig-spin 0.8s linear infinite",
+                    display: "inline-block",
+                  }}
+                />
+              ) : (
+                <span
+                  style={{
+                    width: 9,
+                    height: 9,
+                    border: "1.5px solid #cbd5e1",
+                    borderRadius: "50%",
+                    marginTop: 3,
+                    display: "inline-block",
+                  }}
+                />
+              )}
             </div>
             {s.label}
           </div>
@@ -192,16 +396,16 @@ function ProgressBar({ step }: { step: number }) {
           style={{
             height: "100%",
             width: `${pct}%`,
-            background: step === STEPS.length - 1 ? "#15803d" : "#4f46e5",
+            background: step === doneIndex ? "#15803d" : "#4f46e5",
             borderRadius: 3,
             transition: "width 0.6s ease",
           }}
         />
       </div>
       {/* Current step detail */}
-      {step < STEPS.length - 1 && (
+      {step < doneIndex && (
         <div style={{ fontSize: 12, color: "#6b7280", marginTop: 6, textAlign: "center" }}>
-          {STEPS[step].detail}
+          {steps[step].detail}
         </div>
       )}
     </div>
@@ -216,11 +420,20 @@ export default function AIGPage() {
   const [methodId, setMethodId] = useState(METHODS[0].id);
   const [modelId, setModelId] = useState(UNIQUE_MODELS[0]?.modelId ?? "");
   const [temperature, setTemperature] = useState<0 | 0.5 | 1>(0);
+  const [stimulusType, setStimulusType] = useState<AIGStimulusType>("auto");
+  const [styleCheckEnabled, setStyleCheckEnabled] = useState(false);
+  const [retryEnabled, setRetryEnabled] = useState(false);
+  const [maxAttempts, setMaxAttempts] = useState(3);
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(-1);
+  const [runProgressSteps, setRunProgressSteps] = useState<ProgressStep[]>(
+    getProgressSteps(METHODS[0].id, false, false, "auto")
+  );
   const [result, setResult] = useState<GenerateResult | null>(null);
+  const [resultContext, setResultContext] = useState<ResultContext | null>(null);
   const [error, setError] = useState<string | null>(null);
   const stepTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const activeProgressSteps = useRef<ProgressStep[]>(runProgressSteps);
 
   useEffect(() => {
     fetch("/api/aig/standards")
@@ -235,9 +448,12 @@ export default function AIGPage() {
   function startStepAnimation() {
     stepTimers.current.forEach(clearTimeout);
     stepTimers.current = [];
+    const steps = getProgressSteps(methodId, styleCheckEnabled, retryEnabled, stimulusType);
+    activeProgressSteps.current = steps;
+    setRunProgressSteps(steps);
     setStep(0);
     let elapsed = 0;
-    STEP_DURATIONS.forEach((dur, i) => {
+    getStepDurations(steps).slice(0, -1).forEach((dur, i) => {
       elapsed += dur;
       const t = setTimeout(() => setStep(i + 1), elapsed);
       stepTimers.current.push(t);
@@ -247,20 +463,30 @@ export default function AIGPage() {
   function stopStepAnimation(success: boolean) {
     stepTimers.current.forEach(clearTimeout);
     stepTimers.current = [];
-    setStep(success ? STEPS.length - 1 : -1);
+    setStep(success ? activeProgressSteps.current.length - 1 : -1);
   }
 
   async function handleGenerate() {
     if (!standardCode) return;
     setLoading(true);
     setResult(null);
+    setResultContext(null);
     setError(null);
     startStepAnimation();
     try {
       const res = await fetch("/api/aig/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ standardCode, methodId, model: modelId, temperature }),
+        body: JSON.stringify({
+          standardCode,
+          methodId,
+          model: modelId,
+          temperature,
+          stimulusType,
+          styleCheckEnabled,
+          retryEnabled,
+          maxAttempts,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -269,6 +495,11 @@ export default function AIGPage() {
       } else {
         stopStepAnimation(true);
         setResult(data as GenerateResult);
+        setResultContext({
+          methodId,
+          methodLabel: selectedMethod?.label ?? methodId,
+          stimulusType,
+        });
       }
     } catch {
       stopStepAnimation(false);
@@ -279,12 +510,17 @@ export default function AIGPage() {
   }
 
   const selectedStandard = standards.find((s) => s.standard === standardCode);
+  const selectedMethod = METHODS.find((m) => m.id === methodId);
+  const resultHasGrounding = result ? hasGroundingMatches(result.grounding) : false;
+  const resultMethodUsesRetrieval = (resultContext?.methodId ?? methodId) !== "method_simple_direct";
 
   return (
     <div
       style={{
         minHeight: "100vh",
         background: "#f1f5f9",
+        color: "#111827",
+        colorScheme: "light",
         fontFamily: "'Inter', system-ui, sans-serif",
       }}
     >
@@ -297,6 +533,8 @@ export default function AIGPage() {
             border: "1px solid #e2e8f0",
             padding: 20,
             marginBottom: 24,
+            color: "#111827",
+            colorScheme: "light",
           }}
         >
           <div
@@ -418,6 +656,65 @@ export default function AIGPage() {
                 ))}
               </div>
             </div>
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>
+                Stimulus Type
+              </label>
+              <select
+                value={stimulusType}
+                onChange={(e) => setStimulusType(e.target.value as AIGStimulusType)}
+                style={selectStyle}
+              >
+                {STIMULUS_TYPES.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+              <div style={{ fontSize: 11, color: "#6b7280", marginTop: 6 }}>
+                Auto lets each method choose the most appropriate stimulus.
+              </div>
+            </div>
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>
+                Style Check
+              </label>
+              <label style={checkboxLabelStyle}>
+                <input
+                  type="checkbox"
+                  checked={styleCheckEnabled}
+                  onChange={(e) => {
+                    setStyleCheckEnabled(e.target.checked);
+                    if (!e.target.checked) setRetryEnabled(false);
+                  }}
+                />
+                Run style check
+              </label>
+              <label style={{ ...checkboxLabelStyle, opacity: styleCheckEnabled ? 1 : 0.5 }}>
+                <input
+                  type="checkbox"
+                  checked={retryEnabled}
+                  disabled={!styleCheckEnabled}
+                  onChange={(e) => setRetryEnabled(e.target.checked)}
+                />
+                Retry on failure
+              </label>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                <span style={{ fontSize: 12, color: "#6b7280" }}>Max attempts</span>
+                <select
+                  value={maxAttempts}
+                  disabled={!styleCheckEnabled || !retryEnabled}
+                  onChange={(e) => setMaxAttempts(Number(e.target.value))}
+                  style={{ ...selectStyle, width: 76, padding: "5px 8px" }}
+                >
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
 
           <button
@@ -449,9 +746,11 @@ export default function AIGPage() {
               border: "1px solid #e2e8f0",
               padding: "16px 20px",
               marginBottom: 20,
+              color: "#111827",
+              colorScheme: "light",
             }}
           >
-            <ProgressBar step={step} />
+            <ProgressBar step={step} steps={runProgressSteps} />
           </div>
         )}
 
@@ -475,74 +774,102 @@ export default function AIGPage() {
         {/* Results */}
         {result && (
           <div>
-            {/* Grounding trace */}
-            <Section title="Grounding Trace">
-              <GroundingBadge grounding={result.grounding} />
+            <Section title="Method Summary">
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0 }}>
+                <Field label="Method" value={resultContext?.methodLabel ?? selectedMethod?.label ?? methodId} />
+                <Field label="Requested Stimulus Type" value={resultContext?.stimulusType ?? stimulusType} />
+                <Field
+                  label="Retrieval"
+                  value={
+                    resultMethodUsesRetrieval && resultHasGrounding
+                      ? "Used"
+                      : resultMethodUsesRetrieval
+                        ? "Used, but no matches returned"
+                        : "Not used by this method"
+                  }
+                />
+                <Field
+                  label="LLM Planning"
+                  value={result.blueprint ? "Blueprint generated before item writing" : "No separate blueprint step"}
+                />
+              </div>
             </Section>
 
+            {resultMethodUsesRetrieval && (
+              <Section title="Grounding Trace">
+                <GroundingBadge grounding={result.grounding} />
+              </Section>
+            )}
+
             {/* Blueprint */}
-            <Section title="Blueprint" accent>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 0,
-                }}
-              >
-                <Field label="Target Standard" value={result.blueprint.target_standard} />
-                <Field label="Cognitive Demand" value={result.blueprint.cognitive_demand} />
-              </div>
-              <Field
-                label="Integrated KCs"
-                value={result.blueprint.integrated_kcs.join(" · ")}
-              />
-              <Field
-                label="Key Concepts"
-                value={result.blueprint.key_concepts.join(" · ")}
-              />
-              <Field
-                label="Evidence Pattern"
-                value={result.blueprint.evidence_pattern}
-              />
-              <div style={{ marginBottom: 10 }}>
-                <span style={labelStyle}>Task Sequence</span>
-                {(["Part A", "Part B", "Part C"] as const)
-                  .filter((p) => result.blueprint.task_sequence[p])
-                  .map((p) => {
-                    const part = result.blueprint.task_sequence[p]!;
-                    return (
-                      <div key={p} style={{ fontSize: 13, marginTop: 4 }}>
-                        <strong>{p}</strong>{" "}
-                        <span style={{ fontSize: 11, color: "#9ca3af" }}>
-                          [{part.kc_code}]
-                        </span>{" "}
-                        —{" "}
-                        <span style={{ color: "#6366f1" }}>{part.task_type}</span>
-                        {" "}· {part.function}
-                      </div>
-                    );
-                  })}
-              </div>
-              <Field
-                label="Expected Response Elements"
-                value={
-                  <ul style={{ margin: "4px 0", paddingLeft: 20 }}>
-                    {result.blueprint.expected_response_elements.map((e, i) => (
-                      <li key={i} style={{ fontSize: 13 }}>{e}</li>
-                    ))}
-                  </ul>
-                }
-              />
-              <Field
-                label="Common Incomplete Responses"
-                value={
-                  <ul style={{ margin: "4px 0", paddingLeft: 20 }}>
-                    {result.blueprint.common_incomplete_responses.map((e, i) => (
-                      <li key={i} style={{ fontSize: 13 }}>{e}</li>
-                    ))}
-                  </ul>
-                }
-              />
+            {result.blueprint && (
+              <Section title="Blueprint" accent>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 0,
+                  }}
+                >
+                  <Field label="Target Standard" value={result.blueprint.target_standard} />
+                  <Field label="Cognitive Demand" value={result.blueprint.cognitive_demand} />
+                </div>
+                <Field
+                  label="Integrated KCs"
+                  value={result.blueprint.integrated_kcs.join(" · ")}
+                />
+                <Field
+                  label="Key Concepts"
+                  value={result.blueprint.key_concepts.join(" · ")}
+                />
+                <Field
+                  label="Evidence Pattern"
+                  value={result.blueprint.evidence_pattern}
+                />
+                <div style={{ marginBottom: 10 }}>
+                  <span style={labelStyle}>Task Sequence</span>
+                  {(["Part A", "Part B", "Part C"] as const)
+                    .filter((p) => result.blueprint?.task_sequence[p])
+                    .map((p) => {
+                      const part = result.blueprint!.task_sequence[p]!;
+                      return (
+                        <div key={p} style={{ fontSize: 13, marginTop: 4, color: "#374151" }}>
+                          <strong style={{ color: "#111827" }}>{p}</strong>{" "}
+                          <span style={{ fontSize: 11, color: "#9ca3af" }}>
+                            [{part.kc_code}]
+                          </span>{" "}
+                          —{" "}
+                          <span style={{ color: "#6366f1" }}>{part.task_type}</span>
+                          {" "}· {part.function}
+                        </div>
+                      );
+                    })}
+                </div>
+                <Field
+                  label="Expected Response Elements"
+                  value={
+                    <ul style={{ margin: "4px 0", paddingLeft: 20 }}>
+                      {result.blueprint.expected_response_elements.map((e, i) => (
+                        <li key={i} style={{ fontSize: 13 }}>{e}</li>
+                      ))}
+                    </ul>
+                  }
+                />
+                <Field
+                  label="Common Incomplete Responses"
+                  value={
+                    <ul style={{ margin: "4px 0", paddingLeft: 20 }}>
+                      {result.blueprint.common_incomplete_responses.map((e, i) => (
+                        <li key={i} style={{ fontSize: 13 }}>{e}</li>
+                      ))}
+                    </ul>
+                  }
+                />
+              </Section>
+            )}
+
+            <Section title="Style Check">
+              <StyleCheckPanel result={result} />
             </Section>
 
             {/* Generated Item */}
@@ -564,6 +891,9 @@ export default function AIGPage() {
                     borderRadius: 8,
                     padding: 14,
                     marginBottom: 12,
+                    background: "#fff",
+                    color: "#111827",
+                    colorScheme: "light",
                   }}
                 >
                   <div
@@ -574,7 +904,7 @@ export default function AIGPage() {
                       marginBottom: 8,
                     }}
                   >
-                    <strong style={{ fontSize: 14 }}>{p}</strong>
+                    <strong style={{ fontSize: 14, color: "#111827" }}>{p}</strong>
                     <span
                       style={{
                         fontSize: 11,
@@ -587,13 +917,13 @@ export default function AIGPage() {
                     >
                       {result.item.parts[p].task_type}
                     </span>
-                    {result.blueprint.task_sequence[p]?.kc_code && (
+                    {result.blueprint?.task_sequence[p]?.kc_code && (
                       <span style={{ fontSize: 11, color: "#9ca3af" }}>
                         {result.blueprint.task_sequence[p]!.kc_code}
                       </span>
                     )}
                   </div>
-                  <div style={{ fontSize: 14 }}>
+                  <div style={{ fontSize: 14, color: "#111827", lineHeight: 1.6 }}>
                     {result.item.parts[p].question}
                   </div>
                 </div>
@@ -652,3 +982,24 @@ const labelStyle: React.CSSProperties = {
   display: "block" as const,
   marginBottom: 4,
 };
+
+const checkboxLabelStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  fontSize: 13,
+  color: "#374151",
+  marginBottom: 6,
+};
+
+function pillStyle(kind: "pass" | "fail" | "neutral"): React.CSSProperties {
+  return {
+    fontSize: 12,
+    fontWeight: 700,
+    borderRadius: 999,
+    padding: "4px 10px",
+    background: kind === "pass" ? "#dcfce7" : kind === "fail" ? "#fee2e2" : "#f1f5f9",
+    color: kind === "pass" ? "#166534" : kind === "fail" ? "#991b1b" : "#475569",
+    border: `1px solid ${kind === "pass" ? "#86efac" : kind === "fail" ? "#fecaca" : "#cbd5e1"}`,
+  };
+}

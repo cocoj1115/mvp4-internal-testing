@@ -6,12 +6,15 @@ import {
   getKCsByStandard,
   retrieveStudyGuide,
 } from "./data";
-import { buildBlueprintPrompt, buildItemPrompt } from "./prompts";
+import { buildBlueprintPrompt, buildItemPrompt, buildKeystoneDirectPrompt } from "./prompts";
+import { generateIllustrationB64 } from "./illustration";
 import type {
+  AIGRunOptions,
   Card,
   ContextPack,
   Blueprint,
   GeneratedItem,
+  StyleCheckResult,
 } from "./types";
 
 // ── Vocab overlap helper ──────────────────────────────────────────────────────
@@ -139,6 +142,7 @@ const VALID_STIMULUS_TYPES = new Set([
   "line_graph",
   "bar_chart",
   "diagram",
+  "scenario",
   "illustration",
   "none",
 ]);
@@ -164,6 +168,9 @@ function validateItem(parsed: unknown): string | null {
   }
   if (asset.type === "diagram" && typeof asset.diagram_spec !== "string") {
     return "stimulus_asset.diagram_spec required when type=diagram";
+  }
+  if (asset.type === "scenario" && typeof asset.scenario_text !== "string") {
+    return "stimulus_asset.scenario_text required when type=scenario";
   }
   if (asset.type === "illustration" && typeof asset.illustration_prompt !== "string") {
     return "stimulus_asset.illustration_prompt required when type=illustration";
@@ -219,9 +226,10 @@ async function callWithRetry<T>(
 export async function generateBlueprint(
   ctx: ContextPack,
   model: string,
-  temperature: number
+  temperature: number,
+  options?: AIGRunOptions
 ): Promise<Blueprint> {
-  const { system, user } = buildBlueprintPrompt(ctx);
+  const { system, user } = buildBlueprintPrompt(ctx, options);
   const taxonomyTypes = Object.keys(ctx.taxonomyRows);
   const standardKCCodes = ctx.standardKCs.map((kc) => kc.code);
   return callWithRetry<Blueprint>(
@@ -240,9 +248,10 @@ export async function generateItem(
   ctx: ContextPack,
   model: string,
   temperature: number,
-  telerLevel: number = 3
+  telerLevel: number = 3,
+  options?: AIGRunOptions
 ): Promise<GeneratedItem> {
-  const { system, user } = buildItemPrompt(bp, ctx, telerLevel);
+  const { system, user } = buildItemPrompt(bp, ctx, telerLevel, options);
   return callWithRetry<GeneratedItem>(
     system,
     user,
@@ -252,33 +261,365 @@ export async function generateItem(
   );
 }
 
+export async function generateKeystoneDirectItem(
+  standard: string,
+  model: string,
+  temperature: number,
+  options: AIGRunOptions
+): Promise<GeneratedItem> {
+  const standardKCs = getKCsByStandard(standard);
+  const { system, user } = buildKeystoneDirectPrompt(
+    { standard, standardKCs },
+    options
+  );
+  return callWithRetry<GeneratedItem>(
+    system,
+    user,
+    validateItem,
+    model,
+    temperature
+  );
+}
+
+function emptyGrounding(): ContextPack["grounding"] {
+  return {
+    study_guide: { empty: true, chunk_ids: [] },
+    rubric: { empty: true, items: [] },
+    cards: { empty: true, card_ids: [] },
+  };
+}
+
+function itemForTextReview(item: GeneratedItem): GeneratedItem {
+  if (!item.stimulus_asset.image_b64) return item;
+  return {
+    ...item,
+    stimulus_asset: {
+      ...item.stimulus_asset,
+      image_b64: undefined,
+    },
+  };
+}
+
+function styleCheckPrompt(item: GeneratedItem, standard: string): string {
+  const reviewItem = itemForTextReview(item);
+  return [
+    "You are a Pennsylvania Keystone Biology assessment quality reviewer.",
+    "Evaluate the generated item below against Keystone-specific criteria.",
+    "",
+    "GENERATED ITEM:",
+    JSON.stringify(reviewItem, null, 2),
+    "",
+    `TARGET STANDARD: ${standard}`,
+    "",
+    "EVALUATION CRITERIA:",
+    "",
+    "1. STIMULUS_QUALITY",
+    "PASS: stimulus has specific data, named organisms, labeled conditions, or concrete observations that a student could cite as evidence.",
+    "FAIL: stimulus is vague, has no concrete data, or lacks a usable stimulus.",
+    "",
+    "2. DOK_PROGRESSION",
+    "PASS: Part A is answerable from stimulus with minimal inference, Part B connects stimulus to a biological mechanism, and Part C requires knowledge not directly present in the stimulus.",
+    "FAIL: Part C can be answered from the stimulus alone, or all parts have the same difficulty.",
+    "",
+    "3. KEYSTONE_REGISTER",
+    "PASS: verbs and language are Keystone-appropriate, precise, and exam-like.",
+    "FAIL: yes/no questions, opinion questions, informal phrasing, or vague command verbs.",
+    "",
+    "4. PART_C_OPENNESS",
+    "PASS: Part C allows more than one defensible correct answer or justification path.",
+    "FAIL: Part C has only one narrow correct answer.",
+    "",
+    "5. LOGICAL_PROGRESSION",
+    "PASS: each part builds logically on the previous one.",
+    "FAIL: parts feel disconnected or could be answered in any order.",
+    "",
+    "6. STANDARD_ALIGNMENT",
+    "PASS: item clearly targets the biological concepts in the target standard.",
+    "FAIL: item drifts to unrelated concepts or a different standard.",
+    "",
+    "7. KC_ALIGNMENT",
+    "No target KC is provided in this app version. Mark this criterion pass with flag null unless the item clearly avoids all KCs from the standard.",
+    "",
+    "Set top-level passes=true ONLY if every criterion pass value is true.",
+    "If any criterion pass value is false, top-level passes MUST be false.",
+    "",
+    "Return strict JSON exactly in this shape:",
+    JSON.stringify({
+      passes: true,
+      criteria_results: {
+        stimulus_quality: { pass: true, flag: null },
+        dok_progression: { pass: true, flag: null },
+        keystone_register: { pass: true, flag: null },
+        part_c_openness: { pass: true, flag: null },
+        logical_progression: { pass: true, flag: null },
+        standard_alignment: { pass: true, flag: null },
+        kc_alignment: { pass: true, flag: null },
+      },
+      revision_instructions: null,
+    }),
+  ].join("\n");
+}
+
+function validateStyleCheck(parsed: unknown): string | null {
+  if (!parsed || typeof parsed !== "object") return "Response is not an object";
+  const result = parsed as Record<string, unknown>;
+  if (typeof result.passes !== "boolean") return "passes must be boolean";
+  if (!result.criteria_results || typeof result.criteria_results !== "object") {
+    return "criteria_results must be an object";
+  }
+  const criteria = result.criteria_results as Record<string, unknown>;
+  for (const key of [
+    "stimulus_quality",
+    "dok_progression",
+    "keystone_register",
+    "part_c_openness",
+    "logical_progression",
+    "standard_alignment",
+    "kc_alignment",
+  ]) {
+    const criterion = criteria[key] as Record<string, unknown> | undefined;
+    if (!criterion || typeof criterion !== "object") return `Missing criterion: ${key}`;
+    if (typeof criterion.pass !== "boolean") return `${key}.pass must be boolean`;
+    if (criterion.flag !== null && typeof criterion.flag !== "string") {
+      return `${key}.flag must be string or null`;
+    }
+  }
+  return null;
+}
+
+function normalizeStyleCheck(check: StyleCheckResult): StyleCheckResult {
+  const passes = Object.values(check.criteria_results).every((criterion) => criterion.pass);
+  return {
+    ...check,
+    passes,
+  };
+}
+
+export async function styleCheckItem(
+  item: GeneratedItem,
+  standard: string,
+  model: string,
+  temperature: number
+): Promise<StyleCheckResult> {
+  const check = await callWithRetry<StyleCheckResult>(
+    "You are a Keystone Biology assessment reviewer. Always respond with valid JSON only.",
+    styleCheckPrompt(item, standard),
+    validateStyleCheck,
+    model,
+    temperature
+  );
+  return normalizeStyleCheck(check);
+}
+
+export function buildRevisionInstructions(check: StyleCheckResult): string {
+  const priorityOrder = [
+    "kc_alignment",
+    "dok_progression",
+    "stimulus_quality",
+    "part_c_openness",
+    "standard_alignment",
+    "keystone_register",
+    "logical_progression",
+  ];
+  const entries = Object.entries(check.criteria_results)
+    .filter(([, details]) => !details.pass && details.flag)
+    .sort(([a], [b]) => {
+      const ai = priorityOrder.indexOf(a);
+      const bi = priorityOrder.indexOf(b);
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+    });
+
+  if (entries.length === 0) {
+    return check.revision_instructions ?? "";
+  }
+
+  return [
+    "Fix the following issues in this order:",
+    ...entries.map(([criterion, details], i) => `${i + 1}. ${criterion.toUpperCase()}: ${details.flag}`),
+    "",
+    "Do not change passing parts unless required to fix a listed issue.",
+  ].join("\n");
+}
+
 // ── Method registry ───────────────────────────────────────────────────────────
 
 export interface MethodRunResult {
-  blueprint: Blueprint;
+  blueprint?: Blueprint;
   item: GeneratedItem;
   grounding: ContextPack["grounding"];
+  style_check?: StyleCheckResult;
+  attempts?: Array<{
+    attempt: number;
+    item: GeneratedItem;
+    blueprint?: Blueprint;
+    style_check?: StyleCheckResult;
+    revision_instructions?: string;
+  }>;
+  metadata?: {
+    style_check_enabled: boolean;
+    retry_enabled: boolean;
+    max_attempts: number;
+    attempts: number;
+    final_status: "not_checked" | "passed" | "failed" | "max_attempts_reached";
+  };
 }
 
 export interface AIGMethod {
   label: string;
-  run(standard: string, model: string, temperature: number): Promise<MethodRunResult>;
+  run(
+    standard: string,
+    model: string,
+    temperature: number,
+    options: AIGRunOptions
+  ): Promise<MethodRunResult>;
+}
+
+export interface AIGReviewOptions {
+  styleCheckEnabled: boolean;
+  retryEnabled: boolean;
+  maxAttempts: number;
+}
+
+async function attachGeneratedIllustration(result: MethodRunResult): Promise<MethodRunResult> {
+  const asset = result.item.stimulus_asset;
+  if (asset.type !== "illustration" || !asset.illustration_prompt || asset.image_b64) {
+    return result;
+  }
+
+  try {
+    const imageB64 = await generateIllustrationB64(asset.illustration_prompt);
+    return {
+      ...result,
+      item: {
+        ...result.item,
+        stimulus_asset: {
+          ...asset,
+          image_b64: imageB64,
+        },
+      },
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Image generation failed";
+    return {
+      ...result,
+      item: {
+        ...result.item,
+        stimulus_asset: {
+          ...asset,
+          image_generation_error: message,
+        },
+      },
+    };
+  }
+}
+
+export async function runAIGMethod(
+  method: AIGMethod,
+  standard: string,
+  model: string,
+  temperature: number,
+  options: AIGRunOptions,
+  review: AIGReviewOptions
+): Promise<MethodRunResult> {
+  const maxAttempts = review.styleCheckEnabled && review.retryEnabled
+    ? Math.max(1, Math.min(5, Math.floor(review.maxAttempts || 1)))
+    : 1;
+
+  const attempts: MethodRunResult["attempts"] = [];
+  let revisionInstructions: string | undefined;
+  let best: MethodRunResult | null = null;
+  let bestFailureCount = Number.POSITIVE_INFINITY;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const result = await method.run(standard, model, temperature, {
+      ...options,
+      revisionInstructions,
+    });
+    const resultWithAsset = await attachGeneratedIllustration(result);
+
+    if (!review.styleCheckEnabled) {
+      return {
+        ...resultWithAsset,
+        attempts: [{ attempt, item: resultWithAsset.item, blueprint: resultWithAsset.blueprint }],
+        metadata: {
+          style_check_enabled: false,
+          retry_enabled: false,
+          max_attempts: 1,
+          attempts: attempt,
+          final_status: "not_checked",
+        },
+      };
+    }
+
+    const check = await styleCheckItem(resultWithAsset.item, standard, model, temperature);
+    const failureCount = Object.values(check.criteria_results).filter((r) => !r.pass).length;
+    attempts.push({
+      attempt,
+      item: resultWithAsset.item,
+      blueprint: resultWithAsset.blueprint,
+      style_check: check,
+      revision_instructions: revisionInstructions,
+    });
+
+    const checkedResult: MethodRunResult = {
+      ...resultWithAsset,
+      style_check: check,
+      attempts,
+    };
+
+    if (failureCount < bestFailureCount) {
+      bestFailureCount = failureCount;
+      best = checkedResult;
+    }
+
+    if (failureCount === 0) {
+      return {
+        ...checkedResult,
+        metadata: {
+          style_check_enabled: true,
+          retry_enabled: review.retryEnabled,
+          max_attempts: maxAttempts,
+          attempts: attempt,
+          final_status: "passed",
+        },
+      };
+    }
+
+    if (!review.retryEnabled || attempt === maxAttempts) {
+      return {
+        ...(best ?? checkedResult),
+        attempts,
+        metadata: {
+          style_check_enabled: true,
+          retry_enabled: review.retryEnabled,
+          max_attempts: maxAttempts,
+          attempts: attempt,
+          final_status: review.retryEnabled ? "max_attempts_reached" : "failed",
+        },
+      };
+    }
+
+    revisionInstructions = buildRevisionInstructions(check);
+  }
+
+  return best!;
 }
 
 export const AIG_METHODS: Record<string, AIGMethod> = {
   method_blueprint_l3: {
     label: "Blueprint + TELeR L3",
-    async run(standard, model, temperature) {
+    async run(standard, model, temperature, options) {
       const ctx = await assembleContext(standard);
-      const blueprint = await generateBlueprint(ctx, model, temperature);
-      const item = await generateItem(blueprint, ctx, model, temperature, 3);
+      const blueprint = await generateBlueprint(ctx, model, temperature, options);
+      const item = await generateItem(blueprint, ctx, model, temperature, 3, options);
       return { blueprint, item, grounding: ctx.grounding };
     },
   },
-  method_2: {
-    label: "(placeholder — teammate)",
-    async run() {
-      throw new Error("Not implemented yet");
+  method_simple_direct: {
+    label: "Simple Direct",
+    async run(standard, model, temperature, options) {
+      const item = await generateKeystoneDirectItem(standard, model, temperature, options);
+      return { item, grounding: emptyGrounding() };
     },
   },
   method_3: {

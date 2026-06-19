@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   LineChart,
   Line,
@@ -145,6 +145,18 @@ function DiagramAsset({ spec, caption }: { spec: string; caption: string }) {
     <div>
       <div
         style={{
+          fontSize: 11,
+          fontWeight: 700,
+          textTransform: "uppercase",
+          letterSpacing: "0.05em",
+          color: "#475569",
+          marginBottom: 6,
+        }}
+      >
+        Diagram Spec (text-only, not image generated)
+      </div>
+      <div
+        style={{
           background: "#f8fafc",
           border: "1px solid #e2e8f0",
           borderRadius: 6,
@@ -162,16 +174,47 @@ function DiagramAsset({ spec, caption }: { spec: string; caption: string }) {
   );
 }
 
+function ScenarioAsset({ text, caption }: { text: string; caption: string }) {
+  return (
+    <div>
+      <div
+        style={{
+          background: "#fff",
+          border: "1px solid #e2e8f0",
+          borderRadius: 6,
+          padding: 14,
+          fontSize: 13,
+          color: "#111827",
+          lineHeight: 1.6,
+          whiteSpace: "pre-wrap",
+        }}
+      >
+        {text}
+      </div>
+      {caption && <Caption text={caption} />}
+    </div>
+  );
+}
+
 function IllustrationAsset({
   prompt,
   caption,
+  imageB64,
+  imageError,
 }: {
   prompt: string;
   caption: string;
+  imageB64?: string;
+  imageError?: string;
 }) {
-  const [b64, setB64] = useState<string | null>(null);
+  const [b64, setB64] = useState<string | null>(imageB64 ?? null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(imageError ?? null);
+
+  useEffect(() => {
+    setB64(imageB64 ?? null);
+    setError(imageError ?? null);
+  }, [imageB64, imageError, prompt]);
 
   async function generate() {
     setLoading(true);
@@ -198,12 +241,14 @@ function IllustrationAsset({
   return (
     <div>
       {b64 ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={`data:image/png;base64,${b64}`}
-          alt={caption}
-          style={{ maxWidth: "100%", borderRadius: 6, border: "1px solid #e2e8f0" }}
-        />
+        <div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`data:image/png;base64,${b64}`}
+            alt={caption}
+            style={{ maxWidth: "100%", borderRadius: 6, border: "1px solid #e2e8f0" }}
+          />
+        </div>
       ) : (
         <div
           style={{
@@ -212,6 +257,7 @@ function IllustrationAsset({
             borderRadius: 6,
             padding: 16,
             textAlign: "center",
+            color: "#111827",
           }}
         >
           <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 10 }}>
@@ -238,6 +284,21 @@ function IllustrationAsset({
           </button>
         </div>
       )}
+      <div
+        style={{
+          background: "#f8fafc",
+          border: "1px solid #e2e8f0",
+          borderRadius: 6,
+          padding: 10,
+          marginTop: 10,
+          color: "#334155",
+          fontSize: 12,
+          lineHeight: 1.5,
+          whiteSpace: "pre-wrap",
+        }}
+      >
+        <strong>Image generation prompt:</strong> {prompt}
+      </div>
       {caption && <Caption text={caption} />}
     </div>
   );
@@ -275,6 +336,8 @@ export function StimulusAsset({ asset }: { asset: StimulusAssetType }) {
         borderRadius: 8,
         padding: 14,
         marginBottom: 4,
+        color: "#111827",
+        colorScheme: "light",
       }}
     >
       {asset.type === "table" && asset.table_markdown && (
@@ -286,8 +349,16 @@ export function StimulusAsset({ asset }: { asset: StimulusAssetType }) {
       {asset.type === "diagram" && asset.diagram_spec && (
         <DiagramAsset spec={asset.diagram_spec} caption={asset.caption} />
       )}
+      {asset.type === "scenario" && asset.scenario_text && (
+        <ScenarioAsset text={asset.scenario_text} caption={asset.caption} />
+      )}
       {asset.type === "illustration" && asset.illustration_prompt && (
-        <IllustrationAsset prompt={asset.illustration_prompt} caption={asset.caption} />
+        <IllustrationAsset
+          prompt={asset.illustration_prompt}
+          caption={asset.caption}
+          imageB64={asset.image_b64}
+          imageError={asset.image_generation_error}
+        />
       )}
     </div>
   );
