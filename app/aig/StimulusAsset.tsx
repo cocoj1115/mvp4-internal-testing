@@ -141,11 +141,33 @@ function ChartAsset({
 }
 
 function sanitizeSVG(svg: string): string {
-  return svg
+  const sanitized = svg
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/\bon\w+\s*=\s*"[^"]*"/gi, "")
     .replace(/\bon\w+\s*=\s*'[^']*'/gi, "")
     .replace(/\bon\w+\s*=[^\s/>]*/gi, "");
+
+  return sanitized.replace(
+    /<svg\b([^>]*)>/i,
+    (_match, attrs: string) => {
+      let nextAttrs = attrs;
+      if (!/\bviewBox=/i.test(nextAttrs)) {
+        const width = /width=['"]?(\d+(?:\.\d+)?)['"]?/i.exec(nextAttrs)?.[1] ?? "540";
+        const height = /height=['"]?(\d+(?:\.\d+)?)['"]?/i.exec(nextAttrs)?.[1] ?? "320";
+        nextAttrs += ` viewBox="0 0 ${width} ${height}"`;
+      }
+      if (!/\bpreserveAspectRatio=/i.test(nextAttrs)) {
+        nextAttrs += ' preserveAspectRatio="xMidYMid meet"';
+      }
+      if (!/\brole=/i.test(nextAttrs)) {
+        nextAttrs += ' role="img"';
+      }
+      if (!/\baria-label=/i.test(nextAttrs)) {
+        nextAttrs += ' aria-label="Generated biology diagram"';
+      }
+      return `<svg${nextAttrs}>`;
+    }
+  );
 }
 
 function DiagramAsset({ spec, caption }: { spec: string; caption: string }) {
