@@ -11,6 +11,7 @@ export interface KC {
 export interface TaxonomyEntry {
   definition: string;
   scaffolding: string;
+  difficulty: number;
 }
 
 export interface Card {
@@ -71,7 +72,8 @@ export interface BlueprintTaskPart {
 
 export interface Blueprint {
   target_standard: string;
-  integrated_kcs: string[];
+  core_kc: string;
+  supporting_kcs?: string[];
   cognitive_demand: string;
   key_concepts: string[];
   task_sequence: {
@@ -128,7 +130,7 @@ export interface GeneratedItem {
   parts: {
     "Part A": ItemPart;
     "Part B": ItemPart;
-    "Part C": ItemPart;
+    "Part C"?: ItemPart;
   };
   scoring_rubric: ScoringRubric;
 }

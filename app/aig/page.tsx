@@ -85,7 +85,7 @@ const STIMULUS_TYPES: Array<{ id: AIGStimulusType; label: string }> = [
   { id: "line_graph", label: "Line Graph" },
   { id: "bar_chart", label: "Bar Graph" },
   { id: "scenario", label: "Scenario" },
-  { id: "diagram", label: "Diagram Spec (text-only)" },
+  { id: "diagram", label: "Diagram (SVG)" },
   { id: "illustration", label: "Illustration" },
   { id: "none", label: "None" },
 ];
@@ -814,10 +814,13 @@ export default function AIGPage() {
                   <Field label="Target Standard" value={result.blueprint.target_standard} />
                   <Field label="Cognitive Demand" value={result.blueprint.cognitive_demand} />
                 </div>
-                <Field
-                  label="Integrated KCs"
-                  value={result.blueprint.integrated_kcs.join(" · ")}
-                />
+                <Field label="Core KC" value={result.blueprint.core_kc} />
+                {result.blueprint.supporting_kcs && result.blueprint.supporting_kcs.length > 0 && (
+                  <Field
+                    label="Supporting KCs"
+                    value={result.blueprint.supporting_kcs.join(" · ")}
+                  />
+                )}
                 <Field
                   label="Key Concepts"
                   value={result.blueprint.key_concepts.join(" · ")}
@@ -883,7 +886,7 @@ export default function AIGPage() {
               )}
 
               {/* Parts */}
-              {(["Part A", "Part B", "Part C"] as const).map((p) => (
+              {(["Part A", "Part B", "Part C"] as const).filter((p) => result.item.parts[p]).map((p) => (
                 <div
                   key={p}
                   style={{
@@ -915,7 +918,7 @@ export default function AIGPage() {
                         fontWeight: 600,
                       }}
                     >
-                      {result.item.parts[p].task_type}
+                      {result.item.parts[p]!.task_type}
                     </span>
                     {result.blueprint?.task_sequence[p]?.kc_code && (
                       <span style={{ fontSize: 11, color: "#9ca3af" }}>
@@ -924,7 +927,7 @@ export default function AIGPage() {
                     )}
                   </div>
                   <div style={{ fontSize: 14, color: "#111827", lineHeight: 1.6 }}>
-                    {result.item.parts[p].question}
+                    {result.item.parts[p]!.question}
                   </div>
                 </div>
               ))}
