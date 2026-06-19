@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import OpenAI from "openai";
-
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+import { generateIllustrationB64 } from "@/lib/aig/illustration";
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,19 +8,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "prompt is required" }, { status: 400 });
     }
 
-    const response = await client.images.generate({
-      model: "gpt-image-1",
-      prompt,
-      n: 1,
-      size: "1024x1024",
-      response_format: "b64_json",
-    });
-
-    const b64 = (response.data ?? [])[0]?.b64_json;
-    if (!b64) {
-      return NextResponse.json({ error: "No image returned" }, { status: 500 });
-    }
-
+    const b64 = await generateIllustrationB64(prompt);
     return NextResponse.json({ b64 });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal server error";

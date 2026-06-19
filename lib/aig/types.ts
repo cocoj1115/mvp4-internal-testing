@@ -105,11 +105,12 @@ export type StimulusAssetType =
   | "bar_chart"
   | "diagram"
   | "illustration"
+  | "scenario"
   | "none";
 
 export interface StimulusAsset {
   type: StimulusAssetType;
-  caption: string;
+  title: string;
   table_markdown?: string;
   chart_data?: {
     x_label: string;
@@ -118,6 +119,9 @@ export interface StimulusAsset {
   };
   diagram_spec?: string;
   illustration_prompt?: string;
+  image_b64?: string;
+  image_generation_error?: string;
+  scenario_text?: string;
 }
 
 export interface GeneratedItem {
@@ -129,4 +133,38 @@ export interface GeneratedItem {
     "Part C"?: ItemPart;
   };
   scoring_rubric: ScoringRubric;
+}
+
+export type AIGStimulusType =
+  | "auto"
+  | "table"
+  | "line_graph"
+  | "bar_chart"
+  | "diagram"
+  | "scenario"
+  | "illustration"
+  | "none";
+
+export interface AIGRunOptions {
+  stimulusType: AIGStimulusType;
+  revisionInstructions?: string;
+}
+
+export interface StyleCheckCriterionResult {
+  pass: boolean;
+  flag: string | null;
+}
+
+export interface StyleCheckResult {
+  passes: boolean;
+  criteria_results: {
+    stimulus_quality: StyleCheckCriterionResult;
+    dok_progression: StyleCheckCriterionResult;
+    keystone_register: StyleCheckCriterionResult;
+    part_c_openness: StyleCheckCriterionResult;
+    logical_progression: StyleCheckCriterionResult;
+    standard_alignment: StyleCheckCriterionResult;
+    kc_alignment: StyleCheckCriterionResult;
+  };
+  revision_instructions: string | null;
 }

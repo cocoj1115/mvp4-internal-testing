@@ -1,0 +1,548 @@
+[
+  {
+    "id": "ex_001",
+    "standard_code": "3.1.9-12.A",
+    "module": "A",
+    "reporting_category": "Cells and Cell Processes",
+    "stimulus_type": "DIAGRAM",
+    "biological_context": "amino acid structure and protein synthesis",
+    "source": "2025 Module A Sampler",
+    "question": "Amino acids connect in specific sequences to form specialized proteins. The diagrams show the structure of an amino acid and some examples of R side chains.",
+    "parts": {
+      "a": "Describe the substance in the cell that determines the order of amino acids in a protein.",
+      "b": "Explain how the order of amino acids affects the structure of a protein.",
+      "c": "Explain why having many types of proteins is important for a cell."
+    },
+    "dok_progression": [
+      "describe",
+      "explain",
+      "explain why"
+    ],
+    "notes": "Part A anchors to DNA/mRNA as the substance. Part B connects amino acid sequence to R-group interactions and 3D shape. Part C requires extending to functional diversity — catalysis, transport, structural roles."
+  },
+  {
+    "id": "ex_002",
+    "standard_code": "3.1.9-12.E",
+    "module": "A",
+    "reporting_category": "Homeostasis and Transport",
+    "stimulus_type": "DIAGRAM",
+    "biological_context": "pupil dilation and contraction in response to light",
+    "source": "2025 Module A Sampler",
+    "question": "A teacher keeps a classroom dimly lit for a few minutes. Then the teacher turns on a bright light. The drawing shows how one student's eye changes.",
+    "parts": {
+      "a": "Briefly describe why the student's eyes changed.",
+      "b": "Explain why the teacher had the classroom dimly lit for a few minutes before starting the investigation.",
+      "c": "Describe a feedback mechanism for the pupil of a person's eye if the person were to move from an area with bright light to an area with dim light."
+    },
+    "dok_progression": [
+      "briefly describe",
+      "explain",
+      "describe a feedback mechanism"
+    ],
+    "notes": "Classic feedback mechanism format. Part C explicitly asks for feedback mechanism — a high-frequency Keystone Part C structure. The stimulus shows dim vs bright light eye comparison."
+  },
+  {
+    "id": "ex_003",
+    "standard_code": "3.1.9-12.B",
+    "module": "B",
+    "reporting_category": "Genetics",
+    "stimulus_type": "SCENARIO",
+    "biological_context": "selective breeding of bearded dragons for coat color",
+    "source": "2025 Module B Sampler",
+    "question": "Bearded dragons are a type of lizard and are popular pets for reptile keepers. Wild bearded dragons tend to be dark in color due to a protein called melanin. However, many color variations exist in the pet trade. Breeders have been able to develop bearded dragons that are bright red, orange, and yellow.",
+    "parts": {
+      "a": "Describe how breeders can develop different-colored bearded dragons.",
+      "b": "Describe the role of parental DNA in affecting the colors produced in the offspring.",
+      "c": "A particular desired color is a recessive trait. Describe the process a breeder should use to develop the recessive trait in bearded dragons."
+    },
+    "dok_progression": [
+      "describe",
+      "describe",
+      "describe the process"
+    ],
+    "notes": "Genetics context with selective breeding. Part C requires applying knowledge of recessive trait expression (crossing heterozygotes or homozygous recessives) not directly stated in the scenario."
+  },
+  {
+    "id": "ex_004",
+    "standard_code": "3.1.9-12.F",
+    "module": "B",
+    "reporting_category": "Ecology",
+    "stimulus_type": "DATA_TABLE",
+    "biological_context": "green stormwater infrastructure and ecosystem impact",
+    "source": "2025 Module B Sampler",
+    "question": "Water from heavy rainstorms does not soak into ground that is covered in concrete or some other human-made materials. The table lists some examples of landscaping solutions that address the collection of stormwater. Solutions that are considered environmentally friendly are called 'green'. [Table: Green Stormwater Infrastructure — bioswale, green roof, pervious pavement, rain garden with descriptions]",
+    "parts": {
+      "a": "Describe a likely way that adding green stormwater infrastructure to a community would benefit the local ecosystem.",
+      "b": "Describe two ways that researchers could measure the effectiveness of green stormwater infrastructure."
+    },
+    "dok_progression": [
+      "describe",
+      "describe two ways"
+    ],
+    "notes": "Two-part question (no Part C). Demonstrates that some Keystone items have only A and B. Part B asks for measurement methods — requires applying scientific reasoning beyond the table."
+  },
+  {
+    "id": "ex_005",
+    "standard_code": "3.1.9-12.C",
+    "module": "A",
+    "reporting_category": "Homeostasis and Transport",
+    "stimulus_type": "DATA_TABLE",
+    "biological_context": "stomata opening and closing in response to temperature",
+    "source": "2024-25 Sampler",
+    "question": "A researcher investigated how stomata in plant leaves open and close in response to temperature changes. Four of the same plants were each given 120 milliliters (mL) of water and placed in separate rooms with different temperatures. Each room had a similar light source. [Table: Room Temperature (C) | Amount of Water Collected after 24 Hours (mL) — 16|5.5, 21|7.3, 27|9.9, 37|3.8]",
+    "parts": {
+      "a": "Describe the purpose of the plastic bags that were placed over the plants.",
+      "b": "Describe the relationship between the temperature of the room and the amount of water collected.",
+      "c": "Using the data, describe how stomata most likely help plants maintain homeostasis."
+    },
+    "dok_progression": [
+      "describe",
+      "describe the relationship",
+      "describe how"
+    ],
+    "notes": "Gold standard example. Data table with non-linear trend (reversal at 37C). Part A is purely DOK 1. Part B reads the trend. Part C requires applying homeostasis concept — stomata closing at extreme temps to conserve water."
+  },
+  {
+    "id": "ex_006",
+    "standard_code": "3.1.9-12.G",
+    "module": "B",
+    "reporting_category": "Ecology",
+    "stimulus_type": "BAR_GRAPH",
+    "biological_context": "pollinator abundance and seed production under limited water",
+    "source": "2024-25 Sampler",
+    "question": "A researcher observed that water resources in an area had become limited. The researcher investigated how the role of pollinators, organisms that fertilize flowering plants, is affected by reduced water availability. [Bar graph: Seed Production — Number of Seeds Produced per Test Area (y-axis, 0-80) vs Amount of Available Water (x-axis: optimal ~65, reduced ~30)]",
+    "parts": {
+      "a": "Identify the abiotic limiting factor the researcher studied.",
+      "b": "Predict how the number of seeds produced by flowering plants would most likely be affected by access to unlimited resources.",
+      "c": "Describe the effect of water availability on the abundance of species in the area."
+    },
+    "dok_progression": [
+      "identify",
+      "predict",
+      "describe the effect"
+    ],
+    "notes": "Bar graph stimulus. Part A is single-word DOK 1. Part B requires extrapolating beyond the graph. Part C requires ecological reasoning about biodiversity and limiting factors."
+  },
+  {
+    "id": "ex_007",
+    "standard_code": "3.1.9-12.D",
+    "module": "B",
+    "reporting_category": "Evolution",
+    "stimulus_type": "LINE_GRAPH",
+    "biological_context": "antibiotic resistance in bacteria over time",
+    "source": "2024-25 Sampler",
+    "question": "Resistance to antibiotics is a trait that is developing in several types of bacteria. The graph shows four types of antibiotics and the percentage of bacteria that have become resistant to each type of antibiotic over time. [Line graph: Bacteria Resistance over Time — y-axis: Resistance (% of samples worldwide, 0-30), x-axis: Year (2000-2012), four lines labeled A-D with A reaching ~27%, B reaching ~20%, C and D staying near 0-5%]",
+    "parts": {
+      "a": "Using evidence from the graph, identify the type of antibiotic to which bacteria have developed the most resistance.",
+      "b": "Describe how changes in bacterial DNA enable bacteria populations to develop resistance to a type of antibiotic.",
+      "c": "Identify the antibiotic that scientists should investigate to understand how to effectively treat bacterial infections. Explain your answer using the data provided."
+    },
+    "dok_progression": [
+      "identify using evidence",
+      "describe how",
+      "identify and explain"
+    ],
+    "notes": "Line graph with four labeled trends. Part A is data-reading. Part B requires applying mutation/natural selection mechanism. Part C is open-ended — multiple defensible answers (could argue for C or D as least resistant = still effective)."
+  },
+  {
+    "id": "ex_008",
+    "standard_code": "3.1.9-12.G",
+    "module": "B",
+    "reporting_category": "Ecology",
+    "stimulus_type": "DATA_TABLE",
+    "biological_context": "blue-tailed skink reintroduction with centipede predators",
+    "source": "2024-25 Sampler",
+    "question": "The blue-tailed skink is a small lizard listed as extinct in the wild after populations experienced massive declines suspected to be related to an invasive centipede species. Scientists developed a breeding program and conducted a simulation before reintroduction. [Table 1: Condition Tested | Skink Survival after 3 Months — no centipedes|93%, low density|63%, high density|49%. Table 2: Condition Tested | 0 Months | 12 Months — no centipedes|healthy|healthy, low density|healthy|unhealthy, high density|healthy|unhealthy]",
+    "parts": {
+      "a": "Identify a likely reason why the scientists first conducted a small-scale simulation instead of directly introducing the blue-tailed skink into the wild.",
+      "b": "Predict the likely outcome for reintroducing blue-tailed skinks to their native island. Support your answer with evidence from the simulation.",
+      "c": "Describe the long-term genetic benefit to introducing blue-tailed skinks from a zoo population to a habitat with wild blue-tailed skinks."
+    },
+    "dok_progression": [
+      "identify",
+      "predict with evidence",
+      "describe long-term effect"
+    ],
+    "notes": "Dual-table stimulus. Part B is high-value — requires citing specific data AND making prediction. Part C extends to genetic diversity concepts not in tables (zoo populations may have different alleles, increasing genetic variation)."
+  },
+  {
+    "id": "ex_009",
+    "standard_code": "3.1.9-12.A",
+    "module": "A",
+    "reporting_category": "Cells and Cell Processes",
+    "stimulus_type": "SCENARIO",
+    "biological_context": "prokaryotic vs eukaryotic cell structure and size",
+    "source": "2011 Sampler",
+    "question": "Prokaryotic cells are generally much smaller than eukaryotic cells.",
+    "parts": {
+      "a": "Identify a structural difference between prokaryotic cells and eukaryotic cells that is directly related to their difference in size.",
+      "b": "Based on structural difference, explain why prokaryotic cells can be much smaller than eukaryotic cells.",
+      "c": "Describe one similarity between prokaryotic cells and eukaryotic cells that is independent of size."
+    },
+    "dok_progression": [
+      "identify",
+      "explain",
+      "describe"
+    ],
+    "notes": "Text-only stimulus (older format). Shows that not all Keystone items have visual stimuli — but this is less common in recent samplers. Part A and B are tightly linked. Part C asks for a contrast shift."
+  },
+  {
+    "id": "ex_010",
+    "standard_code": "3.1.9-12.D",
+    "module": "B",
+    "reporting_category": "Genetics",
+    "stimulus_type": "SCENARIO",
+    "biological_context": "codominance in cattle coat color inheritance",
+    "source": "2011 Sampler",
+    "question": "A cattle farmer genetically crosses a cow (female) with a white coat with a bull (male) with a red coat. The resulting calf (offspring) is roan, which means there are red and white hairs intermixed in the coat of the calf. The genes for coat color in cattle are co-dominant.",
+    "parts": {
+      "a": "Although a farm has cattle in all three colors, the farmer prefers roan cattle over white or red cattle. Use the Punnett square to show a cross that would produce only roan offspring.",
+      "b": "Explain how a roan calf results from one white- and one red-coated parent. In your explanation, use letters to represent genes. Be sure to indicate what colors the letters represent.",
+      "c": "Predict the possible genotypes and phenotypes of the offspring produced from two roan cattle."
+    },
+    "dok_progression": [
+      "use Punnett square",
+      "explain using letters",
+      "predict genotypes and phenotypes"
+    ],
+    "notes": "Genetics Punnett square question. Part A requires constructing a cross (RW x RW). Part B requires symbolic representation. Part C is prediction — 1/4 RR (red), 1/2 RW (roan), 1/4 WW (white)."
+  },
+  {
+    "id": "kb_2122_m1_cr14",
+    "standard_code": "3.1.9-12.A",
+    "module": "A",
+    "reporting_category": "Molecules to Organisms: Structures, Functions, and Natural Cycles",
+    "stimulus_type": "CHART",
+    "biological_context": "A two-column chart lists observed cell features for Cell 1 (nucleoid, cytoplasm, plasma membrane) and Cell 2 (mitochondria, cytoplasm, plasma membrane). Students use these observations to classify each cell and identify shared structures not listed.",
+    "source": "Keystone Biology Item and Scoring Sampler 2022–2023, Module 1, Item 14",
+    "question": "Using a microscope, a scientist observed two cells and recorded several features observed for each cell. Cell 1 features: nucleoid, cytoplasm, plasma membrane. Cell 2 features: mitochondria, cytoplasm, plasma membrane.",
+    "parts": {
+      "a": "The scientist recorded a limited number of observations for each cell. Based on the information, classify each cell as either a prokaryote or a eukaryote.\n\nCell 1:\nCell 2:",
+      "b": "Identify another cell structure that would be observed in both cells but is not on the chart and describe the function of this cell structure.\n\nCell Structure:\nFunction:"
+    },
+    "dok_level": 3,
+    "dok_progression": [
+      "classify",
+      "identify and describe"
+    ],
+    "notes": "Alignment BIO.A.1.2.1. Mean score 1.41. Part A (1 point): Cell 1 = prokaryote (presence of nucleoid, absence of membrane-bound organelles); Cell 2 = eukaryote (presence of mitochondria). Part B (2 points: 1 for structure, 1 for function). Accepted structures: DNA (carries genetic information), ribosomes (build proteins / perform translation), cell wall (provides structure / protects cell / prevents bursting), flagellum (cell motility). Note: not all eukaryotic cells have a cell wall or flagellum. Common 0-point error: naming 'exocytosis' as a cell structure (it is a process). Common 2-point error: naming 'cell membrane' as the structure — it is already on the chart as 'plasma membrane' and does not receive credit even if the function description is correct."
+  },
+  {
+    "id": "kb_2122_m1_cr15",
+    "standard_code": "3.1.9-12.C",
+    "module": "A",
+    "reporting_category": "Molecules to Organisms: Structures, Functions, and Natural Cycles",
+    "stimulus_type": "DIAGRAM",
+    "biological_context": "A Venn diagram labeled 'Two Cellular Processes' compares photosynthesis (area X, left only) and cellular respiration (area Z, right only) with a shared overlap section (area Y). Students select two of the three areas and describe characteristics, then explain why some organisms must perform both processes.",
+    "source": "Keystone Biology Item and Scoring Sampler 2022–2023, Module 1, Item 15",
+    "question": "A student draws a Venn diagram to compare and contrast two cellular processes. The diagram has three areas: area X (photosynthesis only), area Y (shared), and area Z (cellular respiration only).",
+    "parts": {
+      "a": "Select two areas from the Venn diagram and describe a characteristic that could be placed into each of the areas.\n\nArea:\nCharacteristic:\n\nArea:\nCharacteristic:",
+      "b": "Explain why some organisms would need to perform both cellular respiration and photosynthesis."
+    },
+    "dok_level": 3,
+    "dok_progression": [
+      "describe characteristics by area",
+      "explain"
+    ],
+    "notes": "Alignment BIO.A.3.2.1. Mean score 1.39. Part A (2 points: 1 per correctly matched area-characteristic pair). Area X only (photosynthesis): occurs in plants/algae/some bacteria; happens in chloroplasts; uses sunlight energy; generates oxygen; makes sugars; includes light-dependent reactions and/or Calvin cycle; fixes carbon; uses CO2; has two stages. Area Y (both): both use an electron transport chain; both use a cycle of enzymes; both generate/use a proton-motive force; both make ATP; both occur inside an organelle; both use ATP synthase; both use each other's products as input. Area Z only (cellular respiration): breaks down sugars/organic molecules; generates water; has a stage in the cytosol (glycolysis); occurs in mitochondria; includes glycolysis and/or citric acid cycle; requires oxygen; has three/four stages; generates CO2. Part B (1 point): must explain the interdependence. Common 0-point error for Part B: stating organisms do both because of 'lack of sunlight' or 'harsher climate'."
+  },
+  {
+    "id": "kb_2122_m2_cr14",
+    "standard_code": "3.1.9-12.S",
+    "module": "B",
+    "reporting_category": "Continuity and Unity of Life",
+    "stimulus_type": "SCENARIO",
+    "biological_context": "Three student statements made after a park visit: Statement 1 — 'There were fourteen trees in the park; all were the same species.' Statement 2 — 'There were no weeds in the park, so pesticides must have been used.' Statement 3 — 'More birds would come to the park if feeding stations were added.' A list of seven forms of scientific information is provided: fact, hypothesis, inference, observation, law, principle, theory.",
+    "source": "Keystone Biology Item and Scoring Sampler 2022–2023, Module 2, Item 14",
+    "question": "A group of students went to a local park. When the students returned to their classroom, they were asked to describe what they saw. Statement 1: There were fourteen trees in the park; all were the same species. Statement 2: There were no weeds in the park, so pesticides must have been used. Statement 3: More birds would come to the park if feeding stations were added.",
+    "parts": {
+      "a": "Select two student statements, and classify each of them as one form of scientific information.\n\nStudent Statement Number:\nClassification:\n\nStudent Statement Number:\nClassification:",
+      "b": "Explain how an observation and a scientific law are related."
+    },
+    "dok_level": 3,
+    "dok_progression": [
+      "classify",
+      "explain relationship"
+    ],
+    "notes": "Alignment BIO.B.3.3.1. Mean score 1.66 (highest-scoring CR in the sampler). Correct classifications: Statement 1 = observation OR fact; Statement 2 = inference; Statement 3 = hypothesis. Common 1-point error: classifying Statement 3 as 'law'. Part B (1 point): must articulate a directional relationship. Incorrect Part B: stating that 'both have information that needs to be viewed over and over'."
+  },
+  {
+    "id": "kb_2122_m2_cr15",
+    "standard_code": "3.1.9-12.F",
+    "module": "B",
+    "reporting_category": "Continuity and Unity of Life",
+    "stimulus_type": "CHART",
+    "biological_context": "An RNA Codon Chart (standard 4x4 grid by first, second, and third position) is provided. A scientist studying a protein identifies leucine (Leu) in the middle of the protein, coded by codon UUA.",
+    "source": "Keystone Biology Item and Scoring Sampler 2022–2023, Module 2, Item 15",
+    "question": "A scientist was studying a long protein in a cell. The amino acid leucine (Leu) was observed in the middle of the protein. Further testing revealed that the codon UUA codes for the leucine.",
+    "parts": {
+      "a": "Provide an example of a mutation to the leucine codon in the cell that would not result in a phenotypic change to the cell.",
+      "b": "Provide an example of a mutation to a single nucleotide of the leucine codon in the cell that would cause a stop codon to be inserted into the middle of the protein.",
+      "c": "Explain what effect deleting a single base from the gene that codes for the protein would likely have on the function of the protein."
+    },
+    "dok_level": 3,
+    "dok_progression": [
+      "provide example (silent mutation)",
+      "provide example (nonsense mutation)",
+      "explain (frameshift deletion)"
+    ],
+    "notes": "Alignment BIO.B.2.3.1. Mean score 1.37. Part A: synonymous mutation still coding for leucine (UUA->UUG or any CUX codon). Part B: single-nucleotide change to stop codon — UUA->UAA or UUA->UGA. Note: UAG is NOT reachable from UUA by a single change — common 0-point error. Part C: must name frameshift mechanics — shifting reading frame for all downstream codons. Vague responses do not receive credit."
+  },
+  {
+    "id": "kb_2324_m1_cr14",
+    "standard_code": "3.1.9-12.F",
+    "module": "A",
+    "reporting_category": "Molecules to Organisms: Structures, Functions, and Natural Cycles",
+    "stimulus_type": "DIAGRAM",
+    "biological_context": "A diagram (Sucrase Reaction) shows the enzyme sucrase binding sucrose at its active site, hydrolyzing it into glucose and fructose, then being released unchanged — a standard enzyme-substrate model.",
+    "source": "Keystone Biology Item and Scoring Sampler 2023–2024, Module 1, Item 14",
+    "question": "The model shows a biochemical reaction utilizing sucrase. The diagram (Sucrase Reaction) depicts sucrose binding to the active site of sucrase, water (H2O) involved in hydrolysis, and the products glucose and fructose being released while sucrase is unchanged.",
+    "parts": {
+      "a": "Explain the role of sucrase in the reaction shown.",
+      "b": "Identify one factor that can affect how sucrase functions, and explain what effect this factor has on the reaction.\n\nFactor:\nEffect:"
+    },
+    "dok_level": 2,
+    "dok_progression": [
+      "explain",
+      "identify and explain"
+    ],
+    "notes": "Alignment BIO.A.2.3.2. Mean score 1.16 — one of the lowest-scoring items. Part A requires identifying sucrase as a catalyst/enzyme that lowers activation energy. Common 0-point error: confusing sucrase for the substrate. Part B is worth 2 points (1 for factor, 1 for effect). Acceptable factors: temperature, pH, enzyme concentration, substrate concentration. A 2-point response can be earned from Part B alone if Part A is wrong."
+  },
+  {
+    "id": "kb_2324_m1_cr15",
+    "standard_code": "3.1.9-12.K",
+    "module": "A",
+    "reporting_category": "Molecules to Organisms: Structures, Functions, and Natural Cycles",
+    "stimulus_type": "DIAGRAM",
+    "biological_context": "A diagram (Glucose Movement) shows glucose crossing two cell membranes: first from the intestinal lumen into an epithelial cell via active transport (process 1, with a pump protein), then from the epithelial cell into the blood via passive transport (process 2, with a channel protein).",
+    "source": "Keystone Biology Item and Scoring Sampler 2023–2024, Module 1, Item 15",
+    "question": "Digestion of food releases glucose into the intestine. Epithelial cells lining the intestine move glucose between the intestine and the blood. Moving glucose from the intestine into the epithelial cell uses active transport (process 1), but moving glucose into the blood uses passive transport (process 2).\n\nThe diagram (Glucose Movement) shows: intestine -> [process 1: active transport, pump protein] -> epithelial cell -> [process 2: passive transport, channel protein] -> blood.",
+    "parts": {
+      "a": "Describe a similarity between process 1 and process 2.",
+      "b": "Describe two differences between process 1 and process 2.\n\nDifference 1:\nDifference 2:"
+    },
+    "dok_level": 3,
+    "dok_progression": [
+      "describe",
+      "describe (x2)"
+    ],
+    "notes": "Alignment BIO.A.4.1.2. Mean score 1.55. DOK 3 — highest in Module 1. Part A (1 point): any valid similarity (both move materials across a membrane; both use protein channels; both transport glucose). Part B (1 point each for two distinct differences). Critical 0-point error for Part B: simply naming the types without describing what makes them different — the sampler explicitly marks this insufficient."
+  },
+  {
+    "id": "kb_2324_m2_cr14",
+    "standard_code": "3.1.9-12.B",
+    "module": "B",
+    "reporting_category": "Continuity and Unity of Life: Biodiversity, Genetics, and Changes over Time",
+    "stimulus_type": "DIAGRAM",
+    "biological_context": "A circular cell cycle diagram shows 8 numbered outer regions corresponding to stages of the cell cycle (interphase regions G1, S, G2 and mitosis M in the inner circle). The cell in the prompt is growing but not replicating DNA or preparing for division, placing it in G1 (area 6).",
+    "source": "Keystone Biology Item and Scoring Sampler 2023–2024, Module 2, Item 14",
+    "question": "A student is observing a cell under a microscope. The cell is growing, but its genetic material has not begun to replicate nor is the cell preparing for division. The student is referencing a model of the cell cycle while observing the cell.\n\nThe Cell Cycle diagram shows 8 numbered outer sections arranged around an inner circle. The inner circle shows M (mitosis), G1, S, and G2 phases. Area 6 corresponds to G1.",
+    "parts": {
+      "a": "Identify the numbered area of the model that represents the student's observations.",
+      "b": "Describe two events that must take place during interphase before the cell can enter mitosis.\n\nEvent 1:\nEvent 2:"
+    },
+    "dok_level": 3,
+    "dok_progression": [
+      "identify",
+      "describe (x2)"
+    ],
+    "notes": "Alignment BIO.B.1.1.1. Mean score 1.34. DOK 3. Part A: area 6 (G1). Common wrong answers: area 1 or area 8. Part B (1 point each): DNA replication (S phase), cell growth, new organelle production, protein synthesis, checkpoint passage. Critical 0-point error: describing mitosis events as interphase events (e.g., 'nuclear envelope dissolves')."
+  },
+  {
+    "id": "kb_2324_m2_cr15",
+    "standard_code": "3.1.9-12.T",
+    "module": "B",
+    "reporting_category": "Continuity and Unity of Life: Biodiversity, Genetics, and Changes over Time",
+    "stimulus_type": "DIAGRAM",
+    "biological_context": "An energy pyramid for an aquatic community shows phytoplankton (60,000 kJ/m2) -> zooplankton (6,000 kJ/m2) -> small fish -> large fish, illustrating the 10% energy transfer rule across four trophic levels.",
+    "source": "Keystone Biology Item and Scoring Sampler 2023–2024, Module 2, Item 15",
+    "question": "A simplified aquatic energy pyramid is shown. It shows the flow of energy transferred in over a year within an aquatic community.\n\nEnergy Pyramid (bottom to top): phytoplankton (60,000 kJ/m2) -> zooplankton (6,000 kJ/m2) -> small fish -> large fish.",
+    "parts": {
+      "a": "Identify the primary consumer in this community.",
+      "b": "The amount of energy transferred from the phytoplankton to the zooplankton is shown to be 6,000 kJ/m2. Determine the amount of energy that will end up as biomass in the body of the large fish.",
+      "c": "Describe what may have happened to the 54,000 kJ/m2 of energy that was not transferred from the phytoplankton to the bodies of the zooplankton."
+    },
+    "dok_level": 3,
+    "dok_progression": [
+      "identify",
+      "determine",
+      "describe"
+    ],
+    "notes": "Alignment BIO.B.4.2.1. Mean score 1.49. DOK 3. Part A: zooplankton. Common wrong answers: large fish or small fish. Part B: 60 kJ/m2 (applying 10% rule twice: 6,000 x 10% = 600 for small fish; 600 x 10% = 60 for large fish). Common wrong answer: 600 (only one application). Part C (1 point): lost as heat, lost as waste/excretion, used in cellular respiration. Common 0-point error: 'consumed by organisms higher in the pyramid'."
+  },
+  {
+    "id": "kb_2425_m1_cr14",
+    "standard_code": "3.1.9-12.C",
+    "module": "A",
+    "reporting_category": "Molecules to Organisms: Structures, Functions, and Natural Cycles",
+    "stimulus_type": "DATA_TABLE",
+    "biological_context": "Researcher investigates how stomata open and close in response to temperature by placing plastic bags over plants in rooms at four different temperatures and measuring the water collected after 24 hours.",
+    "source": "Keystone Biology Item and Scoring Sampler 2024–2025, Module 1, Item 14",
+    "question": "A researcher investigated how stomata in plant leaves open and close in response to temperature changes. Four of the same plants were each given 120 milliliters (mL) of water and placed in separate rooms with different temperatures. Each room had a similar light source.\n\nInvestigation Results:\n| Room Temperature (C) | Amount of Water Collected after 24 Hours (mL) |\n|----------------------|-----------------------------------------------|\n| 16                   | 5.5                                           |\n| 21                   | 7.3                                           |\n| 27                   | 9.9                                           |\n| 37                   | 3.8                                           |",
+    "parts": {
+      "a": "Describe the purpose of the plastic bags that were placed over the plants.",
+      "b": "Describe the relationship between the temperature of the room and the amount of water collected.",
+      "c": "Using the data, describe how stomata most likely help plants maintain homeostasis."
+    },
+    "dok_level": 2,
+    "dok_progression": [
+      "describe",
+      "describe",
+      "describe"
+    ],
+    "notes": "Part A targets experimental design reasoning. Part B requires pattern recognition from a non-linear dataset (water peaks at 27C then drops). Part C connects data pattern to homeostasis — the highest-DOK demand despite all three parts using 'describe.'"
+  },
+  {
+    "id": "kb_2425_m1_cr15",
+    "standard_code": "3.1.9-12.L",
+    "module": "A",
+    "reporting_category": "Molecules to Organisms: Structures, Functions, and Natural Cycles",
+    "stimulus_type": "BAR_GRAPH",
+    "biological_context": "Researcher investigates how reduced water availability affects pollinators and seed production in a flowering plant community, with a bar graph comparing seed output under optimal vs. reduced water conditions.",
+    "source": "Keystone Biology Item and Scoring Sampler 2024–2025, Module 1, Item 15",
+    "question": "A researcher observed that water resources in an area had become limited. The researcher investigated how the role of pollinators, organisms that fertilize flowering plants, is affected by reduced water availability.\n\nGraph — Seed Production:\nX-axis: Amount of Available Water (optimal, reduced)\nY-axis: Number of Seeds Produced per Test Area (0-80)\nBar values: optimal ~ 65 seeds; reduced ~ 30 seeds",
+    "parts": {
+      "a": "Identify the abiotic limiting factor the researcher studied.",
+      "b": "Predict how the number of seeds produced by flowering plants would most likely be affected by access to unlimited resources.",
+      "c": "Describe the effect of water availability on the abundance of species in the area."
+    },
+    "dok_level": 2,
+    "dok_progression": [
+      "identify",
+      "predict",
+      "describe"
+    ],
+    "notes": "Classic abiotic/biotic limiting factor item. Part A is low-demand recall (water). Part B requires prediction beyond the data. Part C scales up from seeds to species abundance — a common source of student confusion."
+  },
+  {
+    "id": "kb_2425_m2_cr14",
+    "standard_code": "3.1.9-12.Q",
+    "module": "B",
+    "reporting_category": "Continuity and Unity of Life: Biodiversity, Genetics, and Changes over Time",
+    "stimulus_type": "LINE_GRAPH",
+    "biological_context": "Graph shows the percentage of bacteria worldwide resistant to four types of antibiotics (A, B, C, D) from 2000 to 2012. Antibiotic A shows the steepest resistance increase (~28% by 2012); antibiotic D shows the least (<5% throughout).",
+    "source": "Keystone Biology Item and Scoring Sampler 2024–2025, Module 2, Item 14",
+    "question": "Resistance to antibiotics is a trait that is developing in several types of bacteria. The graph shows four types of antibiotics and the percentage of bacteria that have become resistant to each type of antibiotic over time.\n\nGraph — Bacteria Resistance to Antibiotics over Time:\nX-axis: Year (2000-2012)\nY-axis: Resistance in Bacteria (% of samples worldwide, 0-30%)\nKey: Lines A, B, C, D — A shows the highest resistance growth; D shows the lowest and most stable resistance.",
+    "parts": {
+      "a": "Using evidence from the graph, identify the type of antibiotic to which bacteria have developed the most resistance.",
+      "b": "Describe how changes in bacterial DNA enable bacteria populations to develop resistance to a type of antibiotic.",
+      "c": "Identify the antibiotic that scientists should investigate to understand how to effectively treat bacterial infections. Explain your answer using the data provided."
+    },
+    "dok_level": 3,
+    "dok_progression": [
+      "identify",
+      "describe",
+      "identify and explain"
+    ],
+    "notes": "Highest DOK item in 2024-25 sampler (DOK 3). Part A is graph-reading with evidence citation. Part B requires mechanistic explanation of mutation and natural selection — students often say bacteria 'become resistant' rather than explaining selection of pre-existing variants. Part C answer is antibiotic D (least resistance = still effective) not A — a deliberate counterintuitive demand."
+  },
+  {
+    "id": "kb_2425_m2_cr15",
+    "standard_code": "3.1.9-12.V",
+    "module": "B",
+    "reporting_category": "Continuity and Unity of Life: Biodiversity, Genetics, and Changes over Time",
+    "stimulus_type": "DATA_TABLE",
+    "biological_context": "Scientists run a small-scale simulation before reintroducing the endangered blue-tailed skink to its native island, which still contains an invasive centipede predator. Two tables show skink survival rates after 3 months and overall health at 0 vs. 12 months under three centipede density conditions.",
+    "source": "Keystone Biology Item and Scoring Sampler 2024–2025, Module 2, Item 15",
+    "question": "The blue-tailed skink is a small lizard listed as extinct in the wild after its populations on a remote island experienced massive declines suspected to be related to an invasive centipede predator.\n\nTable 1 — Results of Small-Group Simulation:\n| Condition Tested           | Skink Survival after 3 Months |\n|----------------------------|--------------------------------|\n| No centipedes              | 93%                            |\n| Low density of centipedes  | 63%                            |\n| High density of centipedes | 49%                            |\n\nTable 2 — Average Skink Overall Health:\n| Condition Tested           | 0 Months | 12 Months |\n|----------------------------|----------|-----------|\n| No centipedes              | Healthy  | Healthy   |\n| Low density of centipedes  | Healthy  | Unhealthy |\n| High density of centipedes | Healthy  | Unhealthy |",
+    "parts": {
+      "a": "Identify a likely reason why the scientists first conducted a small-scale simulation instead of directly introducing the blue-tailed skink into the wild.",
+      "b": "Predict the likely outcome for reintroducing blue-tailed skinks to their native island. Support your answer with evidence from the simulation.",
+      "c": "Describe the long-term genetic benefit to introducing blue-tailed skinks from a zoo population to a habitat with wild blue-tailed skinks."
+    },
+    "dok_level": 2,
+    "dok_progression": [
+      "identify",
+      "predict",
+      "describe"
+    ],
+    "notes": "Part A targets scientific reasoning about simulation design. Part B is a data-supported prediction — students must cite specific survival percentages or health outcomes. Part C pivots to genetic diversity concept not shown in tables — requires knowledge about inbreeding depression and value of new alleles."
+  },
+  {
+    "id": "kb_2526_m1_cr14",
+    "standard_code": "3.1.9-12.A",
+    "module": "A",
+    "reporting_category": "Molecules to Organisms: Structures, Functions, and Natural Cycles",
+    "stimulus_type": "DIAGRAM",
+    "biological_context": "Diagram shows the structure of an amino acid (amino group, R side chain, carboxylic group) and examples of different R side chains, prompting students to reason about protein structure and function from the molecular level up.",
+    "source": "Keystone Biology Item Sampler Scoring Guide 2025–2026, Module 1, Item 14",
+    "question": "Amino acids connect in specific sequences to form specialized proteins. The diagrams show the structure of an amino acid and some examples of R side chains.\n\nDiagram 1 — Amino Acid Model: shows an amino group (NH2), a central carbon bonded to an R side chain, and a carboxylic group (COOH).\nDiagram 2 — Examples of R Side Chains: shows several R side chain structures with varying sizes, shapes, and chemical compositions.",
+    "parts": {
+      "a": "Describe the substance in the cell that determines the order of amino acids in a protein.",
+      "b": "Explain how the order of amino acids affects the structure of a protein.",
+      "c": "Explain why having many types of proteins is important for a cell."
+    },
+    "dok_level": 2,
+    "dok_progression": [
+      "describe",
+      "explain",
+      "explain"
+    ],
+    "notes": "Only item in this set to use 'explain' for two parts (B and C). Part A is straightforward recall of DNA's role. Part B requires connecting R-side-chain chemistry to protein folding. Part C asks for functional reasoning: why structural diversity enables functional diversity. The diagram of R side chains is a key scaffold that students frequently underuse."
+  },
+  {
+    "id": "kb_2526_m1_cr15",
+    "standard_code": "3.1.9-12.C",
+    "module": "A",
+    "reporting_category": "Molecules to Organisms: Structures, Functions, and Natural Cycles",
+    "stimulus_type": "DIAGRAM",
+    "biological_context": "A teacher dims a classroom for a few minutes then turns on a bright light; a diagram shows one student's eye with a large pupil in dim light and a small pupil in bright light, prompting students to explain the feedback mechanism controlling pupil size.",
+    "source": "Keystone Biology Item Sampler Scoring Guide 2025–2026, Module 1, Item 15",
+    "question": "A teacher keeps a classroom dimly lit for a few minutes. Then the teacher turns on a bright light. The drawing shows how one student's eye changes.\n\nDiagram — Eye Investigation: two eyes shown side by side. Left eye (in dim light) has a large pupil; right eye (in bright light) has a small pupil. The iris and pupil are labeled.",
+    "parts": {
+      "a": "Briefly describe why the student's eyes changed.",
+      "b": "Explain why the teacher had the classroom dimly lit for a few minutes before starting the investigation.",
+      "c": "Describe a feedback mechanism for the pupil of a person's eye if the person were to move from an area with bright light to an area with dim light."
+    },
+    "dok_level": 2,
+    "dok_progression": [
+      "describe",
+      "explain",
+      "describe"
+    ],
+    "notes": "Shares standard 3.1.9-12.C with 2024-25 stomata item but shifts to animal nervous system feedback. Part B tests experimental design reasoning — why a baseline/setpoint matters. Part C reverses the stimulus direction from the diagram (dim->bright in diagram; bright->dim in Part C) — a deliberate trap for students who describe the diagram rather than applying the feedback concept."
+  },
+  {
+    "id": "kb_2526_m2_cr14",
+    "standard_code": "3.1.9-12.P",
+    "module": "B",
+    "reporting_category": "Continuity and Unity of Life: Biodiversity, Genetics, and Changes over Time",
+    "stimulus_type": "TEXT",
+    "biological_context": "Bearded dragons are popular pets; wild individuals are dark due to melanin, but breeders have produced bright red, orange, and yellow variants. The scenario introduces selective breeding and the genetics of a recessive color trait.",
+    "source": "Keystone Biology Item Sampler Scoring Guide 2025–2026, Module 2, Item 14",
+    "question": "Bearded dragons are a type of lizard and are popular pets for reptile keepers. Wild bearded dragons tend to be dark in color due to a protein called melanin. However, many color variations exist in the pet trade. Breeders have been able to develop bearded dragons that are bright red, orange, and yellow.",
+    "parts": {
+      "a": "Describe how breeders can develop different-colored bearded dragons.",
+      "b": "Describe the role of parental DNA in affecting the colors produced in the offspring.",
+      "c": "A particular desired color is a recessive trait. Describe the process a breeder should use to develop the recessive trait in bearded dragons."
+    },
+    "dok_level": 2,
+    "dok_progression": [
+      "describe",
+      "describe",
+      "describe"
+    ],
+    "notes": "Text-only stimulus — no graph or table. Part A targets selective breeding mechanism. Part B requires students to articulate DNA inheritance without a Punnett square scaffold. Part C applied genetics: two recessive parents guarantee homozygous recessive offspring, or crossing heterozygotes yields 1-in-4 chance — both equally valid per scoring guide. Common error in Part C: recommending crossing recessive with dominant individuals."
+  },
+  {
+    "id": "kb_2526_m2_cr15",
+    "standard_code": "3.1.9-12.N",
+    "module": "B",
+    "reporting_category": "Continuity and Unity of Life: Biodiversity, Genetics, and Changes over Time",
+    "stimulus_type": "DATA_TABLE",
+    "biological_context": "Heavy rainstorms produce runoff that cannot soak into concrete-covered ground. A table lists four green stormwater infrastructure solutions (bioswale, green roof, pervious pavement, rain garden) with descriptions.",
+    "source": "Keystone Biology Item Sampler Scoring Guide 2025–2026, Module 2, Item 15",
+    "question": "Water from heavy rainstorms does not soak into ground that is covered in concrete or some other human-made materials. The table lists some examples of landscaping solutions that address the collection of stormwater. Solutions that are considered environmentally friendly are called 'green.'\n\nGreen Stormwater Infrastructure:\n| System                        | Description                                                                                      |\n|-------------------------------|--------------------------------------------------------------------------------------------------|\n| Bioswale                      | A channel filled with vegetation designed to transport stormwater away from streets and roofs    |\n| Green roof                    | A layer of plant material that absorbs water on a rooftop                                        |\n| Pervious (permeable) pavement | Pavement designed to be infiltrated by rainwater and melting snow                                |\n| Rain garden                   | A slight depression where water from a roof, driveway, or street can soak into the ground       |",
+    "parts": {
+      "a": "Describe a likely way that adding green stormwater infrastructure to a community would benefit the local ecosystem.",
+      "b": "Describe two ways that researchers could measure the effectiveness of green stormwater infrastructure."
+    },
+    "dok_level": 3,
+    "dok_progression": [
+      "describe",
+      "describe"
+    ],
+    "notes": "Only 2-part item in the set (no Part C). Part B carries 2 of the 3 available points and requires two distinct measurement methods. The scoring rubric is unique: a score of 2 can be earned by describing two valid Part B methods alone (without Part A) — the only item where a single part yields 2 points. DOK 3 reflects the design/evaluation demand. Highest DOK in the 2025-26 set."
+  }
+]
