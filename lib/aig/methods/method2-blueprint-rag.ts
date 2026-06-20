@@ -50,6 +50,9 @@ export function buildBlueprintPrompt(
     "8. key_concepts from core_kc vocab + study-guide grounding. Do NOT invent biology.",
     "9. expected_response_elements and common_incomplete_responses grounded in core_kc and study guide.",
     `10. Stimulus constraint: ${forcedStimulusInstruction(options)}`,
+    "11. EVERY top-level schema key is mandatory. Never omit any field shown in the JSON schema.",
+    "12. evidence_pattern is required on every response. It should briefly name the planned stimulus/evidence form,",
+    "    such as 'monochrome line graph of rate over time', 'black-and-white comparison table', or 'scenario with concrete observations'.",
     "",
     "OUTPUT: strict JSON only, no markdown, matching exactly:",
     JSON.stringify({

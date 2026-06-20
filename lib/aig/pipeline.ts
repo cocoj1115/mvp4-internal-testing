@@ -245,7 +245,7 @@ function validateDirectItemKCSelection(
   return null;
 }
 
-// ── LLM call with 1 retry ─────────────────────────────────────────────────────
+// ── LLM call with schema-aware retries ───────────────────────────────────────
 
 async function callWithRetry<T>(
   system: string,
@@ -275,18 +275,28 @@ async function callWithRetry<T>(
     return res.content;
   };
 
-  const content1 = await call(user);
-  const { value: parsed1, error: parseErr1 } = tryParse(content1);
-  const error1 = parseErr1 ?? validate(parsed1);
-  if (!error1) return parsed1 as T;
+  let lastError = "Unknown validation error";
 
-  const content2 = await call(
-    `${user}\n\nPREVIOUS ATTEMPT FAILED: ${error1}\nPlease fix and return corrected JSON.`
-  );
-  const { value: parsed2, error: parseErr2 } = tryParse(content2);
-  const error2 = parseErr2 ?? validate(parsed2);
-  if (!error2) return parsed2 as T;
-  throw new Error(`AIG generation failed after retry: ${error2}`);
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const userMsg = attempt === 1
+      ? user
+      : [
+          user,
+          "",
+          `PREVIOUS ATTEMPT FAILED: ${lastError}`,
+          "Return corrected JSON only.",
+          "Do not omit any required keys from the schema.",
+          "If a key was missing, include it explicitly even if the value feels obvious.",
+        ].join("\n");
+
+    const content = await call(userMsg);
+    const { value: parsed, error: parseErr } = tryParse(content);
+    const validationError = parseErr ?? validate(parsed);
+    if (!validationError) return parsed as T;
+    lastError = validationError;
+  }
+
+  throw new Error(`AIG generation failed after retry: ${lastError}`);
 }
 
 // ── generateBlueprint ─────────────────────────────────────────────────────────
