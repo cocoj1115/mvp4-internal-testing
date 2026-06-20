@@ -102,6 +102,11 @@ const STIMULUS_TYPES: Array<{ id: AIGStimulusType; label: string }> = [
   { id: "none", label: "None" },
 ];
 
+function getStimulusTypeLabel(type: AIGStimulusType | GeneratedItem["stimulus_asset"]["type"]): string {
+  const match = STIMULUS_TYPES.find((entry) => entry.id === type);
+  return match?.label ?? type;
+}
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function Section({
@@ -798,7 +803,14 @@ export default function AIGPage() {
             <Section title="Method Summary">
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0 }}>
                 <Field label="Method" value={resultContext?.methodLabel ?? selectedMethod?.label ?? methodId} />
-                <Field label="Requested Stimulus Type" value={resultContext?.stimulusType ?? stimulusType} />
+                <Field
+                  label="Requested Stimulus Type"
+                  value={getStimulusTypeLabel(resultContext?.stimulusType ?? stimulusType)}
+                />
+                <Field
+                  label="Generated Stimulus Type"
+                  value={getStimulusTypeLabel(result.item.stimulus_asset.type)}
+                />
                 <Field
                   label="Retrieval"
                   value={
