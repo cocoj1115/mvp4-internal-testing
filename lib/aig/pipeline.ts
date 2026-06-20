@@ -165,6 +165,11 @@ const VALID_STIMULUS_TYPES = new Set([
   "none",
 ]);
 
+function containsRubricPlaceholder(text: unknown): boolean {
+  if (typeof text !== "string") return false;
+  return /\[[^\]]+\]/.test(text) || /<[^>]+>/.test(text);
+}
+
 function validateItem(parsed: unknown): string | null {
   if (!parsed || typeof parsed !== "object") return "Response is not an object";
   const item = parsed as Record<string, unknown>;
@@ -204,6 +209,19 @@ function validateItem(parsed: unknown): string | null {
   const rubric = item.scoring_rubric as Record<string, unknown>;
   if (!rubric["3"] || !rubric["2"] || !rubric["1"] || !rubric["0"]) {
     return `scoring_rubric must have keys "0", "1", "2", "3"`;
+  }
+  for (const score of ["3", "2", "1", "0"] as const) {
+    if (typeof rubric[score] !== "string") {
+      return `scoring_rubric.${score} must be a string`;
+    }
+  }
+  if (
+    containsRubricPlaceholder(rubric["3"]) ||
+    containsRubricPlaceholder(rubric["2"]) ||
+    containsRubricPlaceholder(rubric["1"]) ||
+    containsRubricPlaceholder(rubric["0"])
+  ) {
+    return "scoring_rubric contains unresolved placeholder text";
   }
   return null;
 }
