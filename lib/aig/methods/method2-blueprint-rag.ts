@@ -21,7 +21,9 @@ export function buildBlueprintPrompt(
     "",
     "INSTRUCTIONS:",
     "1. Review ALL KCs listed under the target standard.",
-    "2. SELECT ONE core KC to explore in depth across all parts (core_kc).",
+    ctx.selectedCoreKC
+      ? `2. Use the PRESELECTED core KC exactly as core_kc: ${ctx.selectedCoreKC.code}. Do not choose a different core_kc.`
+      : "2. SELECT ONE core KC to explore in depth across all parts (core_kc).",
     "   Parts A/B/C probe different facets or levels of that SAME core concept — not different topics.",
     "   You may list 0–2 other KCs from the same standard as supporting_kcs if they provide genuine",
     "   background context, but do NOT devote a whole part to a separate concept.",
@@ -76,6 +78,15 @@ export function buildBlueprintPrompt(
     .map((kc) => `  ${kc.code}: ${kc.statement}\n    Vocab: ${kc.vocab.join(", ")}`)
     .join("\n");
 
+  const selectedCoreSection = ctx.selectedCoreKC
+    ? [
+        `Selected core KC: ${ctx.selectedCoreKC.code}`,
+        `Statement: ${ctx.selectedCoreKC.statement}`,
+        `Vocab: ${ctx.selectedCoreKC.vocab.join(", ") || "(none)"}`,
+        "The blueprint JSON core_kc value must exactly match this selected core KC.",
+      ].join("\n")
+    : "(No preselected core KC; choose one from the list above.)";
+
   const taxonomySection = Object.entries(ctx.taxonomyRows)
     .sort(([, a], [, b]) => a.difficulty - b.difficulty)
     .map(([name, entry]) =>
@@ -94,7 +105,9 @@ export function buildBlueprintPrompt(
     })
     .join("\n");
 
-  const combinedVocab = ctx.standardKCs.flatMap((kc) => kc.vocab);
+  const combinedVocab = ctx.selectedCoreKC?.vocab.length
+    ? ctx.selectedCoreKC.vocab
+    : ctx.standardKCs.flatMap((kc) => kc.vocab);
   const wholeItemSection = getWholeItems()
     .map((item) => ({
       item,
@@ -124,6 +137,9 @@ export function buildBlueprintPrompt(
     `Standard: ${ctx.standard}`,
     `KCs under this standard (${ctx.standardKCs.length} total):`,
     kcListSection,
+    "",
+    "=== PRESELECTED CORE KC ===",
+    selectedCoreSection,
     "",
     "=== 12 TAXONOMY TYPES (choose task_types only from these) ===",
     taxonomySection,

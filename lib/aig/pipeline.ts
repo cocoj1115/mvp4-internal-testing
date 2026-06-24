@@ -24,6 +24,32 @@ function vocabOverlap(text: string, vocab: string[]): number {
   return vocab.filter((v) => lower.includes(v.toLowerCase())).length;
 }
 
+function sampleWithoutReplacement<T>(items: T[], count: number): T[] {
+  const pool = [...items];
+  const selected: T[] = [];
+  while (pool.length > 0 && selected.length < count) {
+    const index = Math.floor(Math.random() * pool.length);
+    selected.push(pool[index]);
+    pool.splice(index, 1);
+  }
+  return selected;
+}
+
+function selectRandomKC(standardKCs: ContextPack["standardKCs"]): ContextPack["standardKCs"][number] {
+  if (standardKCs.length === 0) {
+    throw new Error("Cannot select a core KC because the standard has no KCs.");
+  }
+  return standardKCs[Math.floor(Math.random() * standardKCs.length)];
+}
+
+function selectStudyGuideChunksForCoreKC(
+  chunks: Array<{ chunk_id: string; text: string; score: number }>
+): Array<{ chunk_id: string; text: string; score: number }> {
+  const fixed = chunks.slice(0, 2);
+  const randomized = sampleWithoutReplacement(chunks.slice(2, 8), 2);
+  return [...fixed, ...randomized].sort((a, b) => b.score - a.score);
+}
+
 // ── assembleContext ───────────────────────────────────────────────────────────
 
 export async function assembleContext(standard: string): Promise<ContextPack> {
@@ -93,6 +119,74 @@ export async function assembleContext(standard: string): Promise<ContextPack> {
   };
 }
 
+export async function assembleContextForCoreKC(
+  standard: string,
+  coreKCCode: string
+): Promise<ContextPack> {
+  const taxonomy = getTaxonomy();
+  const allCards = getCards();
+  const { item_specific: itemRubrics } = getRubrics();
+  const standardKCs = getKCsByStandard(standard);
+  const selectedCoreKC = standardKCs.find((kc) => kc.code === coreKCCode);
+
+  if (!selectedCoreKC) {
+    throw new Error(`Core KC "${coreKCCode}" is not valid for standard "${standard}".`);
+  }
+
+  const coreVocab = Array.from(new Set(selectedCoreKC.vocab));
+  const queryParts = [selectedCoreKC.statement, ...coreVocab].filter(Boolean);
+  const studyGuideQuery = queryParts.join(". ");
+  const candidateChunks = await retrieveStudyGuide(studyGuideQuery, 8, 0.25);
+  const studyGuideChunks = selectStudyGuideChunksForCoreKC(candidateChunks);
+
+  const { getABCPriors } = await import("./data");
+  const priors = getABCPriors();
+  const priorTypes = new Set(priors.flatMap((p) => p.sequence));
+
+  const relatedCards: Card[] = allCards
+    .map((c) => ({
+      card: c,
+      score: vocabOverlap(c.prompt, coreVocab) * 3 + (priorTypes.has(c.primary_type) ? 1 : 0),
+    }))
+    .filter((sc) => sc.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 12)
+    .map((sc) => sc.card);
+
+  const matched = itemRubrics.filter(
+    (r) =>
+      r.alignment === standard ||
+      vocabOverlap(r.scoring_guideline, coreVocab) >= 2
+  );
+  const relevantRubrics = matched.length > 0 ? matched : itemRubrics;
+
+  const grounding = {
+    study_guide: {
+      empty: studyGuideChunks.length === 0,
+      chunk_ids: studyGuideChunks.map((c) => c.chunk_id),
+    },
+    rubric: {
+      empty: relevantRubrics.length === 0,
+      items: relevantRubrics.map((r) => r.item),
+    },
+    cards: {
+      empty: relatedCards.length === 0,
+      card_ids: relatedCards.map((c) => c.card_id),
+    },
+  };
+
+  return {
+    standard,
+    standardKCs,
+    selectedCoreKC,
+    studyGuideChunks,
+    relatedCards,
+    taxonomyRows: taxonomy,
+    relevantRubrics,
+    grounding,
+  };
+}
+
 // ── Validation ────────────────────────────────────────────────────────────────
 
 const REQUIRED_BP_KEYS = [
@@ -109,7 +203,8 @@ const REQUIRED_BP_KEYS = [
 function validateBlueprint(
   parsed: unknown,
   taxonomyTypes: string[],
-  standardKCCodes: string[]
+  standardKCCodes: string[],
+  fixedCoreKC?: string
 ): string | null {
   if (!parsed || typeof parsed !== "object") return "Response is not an object";
   const bp = parsed as Record<string, unknown>;
@@ -122,6 +217,9 @@ function validateBlueprint(
   if (typeof coreKC !== "string" || !standardKCCodes.includes(coreKC)) {
     return `core_kc must be a valid KC code under this standard: "${coreKC}"`;
   }
+  if (fixedCoreKC && coreKC !== fixedCoreKC) {
+    return `core_kc must equal the preselected core KC: "${fixedCoreKC}"`;
+  }
 
   const supporting = bp.supporting_kcs;
   if (supporting !== undefined) {
@@ -129,6 +227,9 @@ function validateBlueprint(
     for (const code of supporting as string[]) {
       if (!standardKCCodes.includes(code)) {
         return `supporting_kcs contains unknown KC code: "${code}"`;
+      }
+      if (code === coreKC) {
+        return "supporting_kcs must not repeat core_kc";
       }
     }
   }
@@ -328,10 +429,11 @@ export async function generateBlueprint(
   const { system, user } = buildBlueprintPrompt(ctx, options);
   const taxonomyTypes = Object.keys(ctx.taxonomyRows);
   const standardKCCodes = ctx.standardKCs.map((kc) => kc.code);
+  const fixedCoreKC = ctx.selectedCoreKC?.code;
   return callWithRetry<Blueprint>(
     system,
     user,
-    (p) => validateBlueprint(p, taxonomyTypes, standardKCCodes),
+    (p) => validateBlueprint(p, taxonomyTypes, standardKCCodes, fixedCoreKC),
     model,
     temperature
   );
@@ -562,6 +664,7 @@ export interface MethodRunResult {
 
 export interface AIGMethod {
   label: string;
+  selectCoreKCBeforeRun?: boolean;
   run(
     standard: string,
     model: string,
@@ -620,6 +723,12 @@ export async function runAIGMethod(
   const maxAttempts = review.styleCheckEnabled && review.retryEnabled
     ? Math.max(1, Math.min(5, Math.floor(review.maxAttempts || 1)))
     : 1;
+  const runOptions: AIGRunOptions = method.selectCoreKCBeforeRun && !options.fixedCoreKC
+    ? {
+        ...options,
+        fixedCoreKC: selectRandomKC(getKCsByStandard(standard)).code,
+      }
+    : options;
 
   const attempts: MethodRunResult["attempts"] = [];
   let revisionInstructions: string | undefined;
@@ -628,7 +737,7 @@ export async function runAIGMethod(
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const result = await method.run(standard, model, temperature, {
-      ...options,
+      ...runOptions,
       revisionInstructions,
     });
     const resultWithAsset = await attachGeneratedIllustration(result);
@@ -704,8 +813,10 @@ export async function runAIGMethod(
 export const AIG_METHODS: Record<string, AIGMethod> = {
   method_blueprint_l3: {
     label: "Blueprint + TELeR L3",
+    selectCoreKCBeforeRun: true,
     async run(standard, model, temperature, options) {
-      const ctx = await assembleContext(standard);
+      const coreKC = options.fixedCoreKC ?? selectRandomKC(getKCsByStandard(standard)).code;
+      const ctx = await assembleContextForCoreKC(standard, coreKC);
       const blueprint = await generateBlueprint(ctx, model, temperature, options);
       const item = await generateItem(blueprint, ctx, model, temperature, 3, options);
       return { blueprint, item, grounding: ctx.grounding };

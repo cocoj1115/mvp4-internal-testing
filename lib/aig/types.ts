@@ -53,6 +53,7 @@ export interface ItemRubric {
 export interface ContextPack {
   standard: string;
   standardKCs: KC[];
+  selectedCoreKC?: KC;
   studyGuideChunks: Array<{ chunk_id: string; text: string; score: number }>;
   relatedCards: Card[];
   taxonomyRows: Record<string, TaxonomyEntry>;
@@ -151,6 +152,7 @@ export type AIGStimulusType =
 export interface AIGRunOptions {
   stimulusType: AIGStimulusType;
   revisionInstructions?: string;
+  fixedCoreKC?: string;
 }
 
 export interface StyleCheckCriterionResult {
