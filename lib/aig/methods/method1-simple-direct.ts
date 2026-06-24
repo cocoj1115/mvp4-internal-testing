@@ -131,9 +131,9 @@ export function buildKeystoneDirectPrompt(
     },
     scoring_rubric: {
       points_possible: 3,
-      "3": "Thorough — by ALL of: [Part A concept] AND [Part B concept] AND [Part C concept]",
-      "2": "Partial — fulfilling TWO of the bullets",
-      "1": "Minimal — fulfilling ONE of the bullets",
+      "3": "Thorough — by ALL of: actual Part A biology criterion AND actual Part B biology criterion AND actual Part C biology criterion",
+      "2": "Partial — fulfilling any two of those actual biology criteria",
+      "1": "Minimal — fulfilling one actual biology criterion",
       "0": "Insufficient evidence",
     },
   };
@@ -172,6 +172,8 @@ export function buildKeystoneDirectPrompt(
     "  - Replace all rubric template text with concrete content specific to this item.",
     "  - Do NOT leave placeholders such as [Part A concept], [Part B concept], [Part C concept], [bullet A], or angle-bracket template text.",
     "  - The rubric must describe the actual biology ideas required for credit.",
+    "  - The 3-point rubric must explicitly name the actual Part A, Part B, and Part C credit criteria.",
+    "  - The scoring_rubric strings in the schema below are format examples only; do not copy them verbatim.",
     "If type='diagram', diagram_spec MUST be a complete inline SVG string, not prose.",
     "For diagram SVG output:",
     "  - Start with <svg width='540' height='320' xmlns='http://www.w3.org/2000/svg'>.",
