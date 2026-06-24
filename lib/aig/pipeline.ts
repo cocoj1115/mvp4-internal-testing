@@ -336,6 +336,11 @@ function validateDirectItemKCSelection(
   if (baseError) return baseError;
 
   const item = parsed as Record<string, unknown>;
+  const normalizedCode = (value: unknown): string | null => {
+    if (typeof value !== "string") return null;
+    if (standardKCCodes.includes(value)) return value;
+    return standardKCCodes.find((code) => code.endsWith(value)) ?? null;
+  };
 
   if (item.target_standard !== undefined) {
     if (typeof item.target_standard !== "string" || item.target_standard !== targetStandard) {
@@ -343,22 +348,28 @@ function validateDirectItemKCSelection(
     }
   }
 
-  const coreKC = item.core_kc;
-  if (typeof coreKC !== "string" || !standardKCCodes.includes(coreKC)) {
-    return `core_kc must be a valid KC code under this standard: "${coreKC}"`;
+  const rawCoreKC = item.core_kc;
+  const coreKC = normalizedCode(rawCoreKC);
+  if (!coreKC) {
+    return `core_kc must be a valid KC code under this standard: "${String(rawCoreKC)}"`;
   }
+  item.core_kc = coreKC;
 
   const supporting = item.supporting_kcs;
   if (supporting !== undefined) {
     if (!Array.isArray(supporting)) return "supporting_kcs must be an array";
+    const normalizedSupporting: string[] = [];
     for (const code of supporting as unknown[]) {
-      if (typeof code !== "string" || !standardKCCodes.includes(code)) {
+      const normalized = normalizedCode(code);
+      if (!normalized) {
         return `supporting_kcs contains unknown KC code: "${String(code)}"`;
       }
-      if (code === coreKC) {
+      if (normalized === coreKC) {
         return "supporting_kcs must not repeat core_kc";
       }
+      normalizedSupporting.push(normalized);
     }
+    item.supporting_kcs = normalizedSupporting;
   }
 
   return null;

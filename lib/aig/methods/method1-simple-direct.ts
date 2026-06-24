@@ -102,7 +102,7 @@ export function buildKeystoneDirectPrompt(
   const exemplars = getRelevantExemplars(ctx.standard, moduleCode, options.stimulusType);
   const exemplarSection = formatExemplarsForPrompt(exemplars);
   const kcLines = ctx.standardKCs
-    .map((kc) => `  - ${kc.kcId}: ${kc.statement}\n    Vocabulary: ${kc.vocab.join(", ")}`)
+    .map((kc) => `  - ${kc.code} (${kc.kcId}): ${kc.statement}\n    Vocabulary: ${kc.vocab.join(", ")}`)
     .join("\n");
   const vocab = Array.from(new Set(ctx.standardKCs.flatMap((kc) => kc.vocab))).join(", ");
 
@@ -150,7 +150,8 @@ export function buildKeystoneDirectPrompt(
     "Before writing the item, choose the KC focus explicitly:",
     "  - Select EXACTLY ONE core_kc from the KCs listed below as the primary assessed concept.",
     "  - You may include 0-2 supporting_kcs from the same standard if they genuinely support the item.",
-    "  - Return the selected KC code(s) in the JSON output.",
+    "  - Return the full KC code shown before the parentheses, not the short local ID in parentheses.",
+    "  - Example: return '3.1.9-12.B4', not 'B4'.",
     "  - Keep the item mainly focused on the selected core_kc.",
     "",
     "Knowledge Components in scope:",
