@@ -7,17 +7,6 @@ function vocabOverlap(text: string, vocab: string[]): number {
   return vocab.filter((v) => lower.includes(v.toLowerCase())).length;
 }
 
-const STIMULUS_SELECTION_CRITERIA = [
-  "Stimulus selection criteria:",
-  "  - table: use when exact condition/value data are central to the reasoning.",
-  "  - line_graph: use when a trend over time, dose, temperature, or another continuous variable is central.",
-  "  - bar_chart: use when comparing discrete groups, categories, treatments, or conditions is central.",
-  "  - scenario: use only when graph, table, diagram, and illustration would be unnatural or unnecessary.",
-  "  - diagram: use only when labeled structure, spatial relationship, process flow, or arrows are essential.",
-  "  - illustration: use when complex biological visual detail is needed beyond simple SVG shapes.",
-  "Do not default to scenario or diagram. Prefer table/graph when quantitative evidence would naturally support the task.",
-];
-
 function stimulusGenerationRules(type: Blueprint["stimulus_type"]): string[] {
   const common = [
     "For every stimulus type except 'none', provide stimulus_asset.title as a short Keystone-style figure title.",
@@ -110,14 +99,6 @@ export function buildBlueprintPrompt(
   const fixedStimulusType = options?.stimulusType && options.stimulusType !== "auto"
     ? options.stimulusType
     : undefined;
-  const stimulusSelectionInstruction = fixedStimulusType
-    ? [
-        `11. Use the requested stimulus_type exactly: ${fixedStimulusType}. Do not choose a different stimulus_type.`,
-      ]
-    : [
-        "11. Choose exactly one stimulus_type for the blueprint using the criteria below.",
-        ...STIMULUS_SELECTION_CRITERIA.map((line) => `   ${line}`),
-      ];
 
   const system = [
     "You are an expert assessment designer for Pennsylvania Keystone Biology.",
@@ -157,7 +138,9 @@ export function buildBlueprintPrompt(
     "8. key_concepts from core_kc vocab + study-guide grounding. Do NOT invent biology.",
     "9. expected_response_elements and common_incomplete_responses grounded in core_kc and study guide.",
     `10. Stimulus constraint: ${forcedStimulusInstruction(options)}`,
-    ...stimulusSelectionInstruction,
+    fixedStimulusType
+      ? `11. Use the requested stimulus_type exactly: ${fixedStimulusType}. Do not choose a different stimulus_type.`
+      : "11. Use the app-provided stimulus_type. Do not use stimulus_type='none'.",
     "12. EVERY top-level schema key is mandatory. Never omit any field shown in the JSON schema.",
     "13. evidence_pattern is required on every response. It should briefly name the planned stimulus/evidence form,",
     "    such as 'monochrome line graph of rate over time', 'black-and-white comparison table', or 'scenario with concrete observations'.",
@@ -262,9 +245,7 @@ export function buildBlueprintPrompt(
     "",
     "=== STIMULUS CONSTRAINT ===",
     forcedStimulusInstruction(options),
-    fixedStimulusType
-      ? `\n=== FIXED STIMULUS TYPE ===\n${fixedStimulusType}`
-      : `\n=== STIMULUS SELECTION CRITERIA ===\n${STIMULUS_SELECTION_CRITERIA.join("\n")}`,
+    fixedStimulusType ? `\n=== FIXED STIMULUS TYPE ===\n${fixedStimulusType}` : "",
     "",
     "Produce the blueprint JSON now.",
   ].join("\n");

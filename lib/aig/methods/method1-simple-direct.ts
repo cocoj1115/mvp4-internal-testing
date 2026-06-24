@@ -94,23 +94,6 @@ function formatExemplarsForPrompt(exemplars: KeystoneExemplar[]): string {
   return lines.join("\n");
 }
 
-const STIMULUS_SELECTION_CRITERIA = [
-  "STIMULUS TYPE SELECTION CRITERIA",
-  "Choose exactly one stimulus_asset.type using the criteria below.",
-  "  - table: use when exact condition/value data are central to the reasoning.",
-  "  - line_graph: use when change over time, dose, temperature, concentration, or another continuous variable is central.",
-  "  - bar_chart: use when comparing discrete groups, categories, treatments, or conditions is central.",
-  "  - diagram: use only when labeled structure, spatial relationship, process flow, or arrows are essential.",
-  "  - illustration: use when complex biological visual detail is needed beyond simple SVG shapes.",
-  "  - scenario: use only when table, graph, diagram, and illustration would be unnatural or unnecessary.",
-  "Select the stimulus type that best supports the Part A/B/C reasoning path.",
-];
-
-function stimulusSelectionCriteriaForPrompt(options: AIGRunOptions): string[] {
-  if (options.stimulusType !== "auto") return [];
-  return STIMULUS_SELECTION_CRITERIA;
-}
-
 export function buildKeystoneDirectPrompt(
   ctx: Pick<ContextPack, "standard" | "standardKCs">,
   options: AIGRunOptions
@@ -192,7 +175,6 @@ export function buildKeystoneDirectPrompt(
     "",
     `Required Stimulus: ${options.stimulusType === "auto" ? "AUTO" : notebookStimulusLabel(options.stimulusType)}`,
     `Stimulus constraint: ${forcedStimulusInstruction(options)}`,
-    ...stimulusSelectionCriteriaForPrompt(options),
     "For every stimulus type except 'none', provide a short stimulus_asset.title in Keystone style.",
     "The title should be a concise noun phrase such as 'Heart Rate of a Black Bear', 'Seed Production', or 'Investigation Setup'.",
     "Visual style for all stimuli must match Pennsylvania Keystone exam figures:",

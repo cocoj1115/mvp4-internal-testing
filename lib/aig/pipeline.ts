@@ -10,6 +10,7 @@ import { buildBlueprintPrompt, buildItemPrompt, buildKeystoneDirectPrompt } from
 import { generateIllustrationB64 } from "./illustration";
 import type {
   AIGRunOptions,
+  AIGStimulusType,
   Card,
   ContextPack,
   Blueprint,
@@ -40,6 +41,19 @@ function selectRandomKC(standardKCs: ContextPack["standardKCs"]): ContextPack["s
     throw new Error("Cannot select a core KC because the standard has no KCs.");
   }
   return standardKCs[Math.floor(Math.random() * standardKCs.length)];
+}
+
+const RANDOM_STIMULUS_TYPES: Exclude<AIGStimulusType, "auto" | "none">[] = [
+  "table",
+  "line_graph",
+  "bar_chart",
+  "diagram",
+  "scenario",
+  "illustration",
+];
+
+function selectRandomStimulusType(): Exclude<AIGStimulusType, "auto" | "none"> {
+  return RANDOM_STIMULUS_TYPES[Math.floor(Math.random() * RANDOM_STIMULUS_TYPES.length)];
 }
 
 function selectStudyGuideChunksForCoreKC(
@@ -356,12 +370,18 @@ function validateDirectItemKCSelection(
   parsed: unknown,
   targetStandard: string,
   standardKCCodes: string[],
-  fixedCoreKC?: string
+  fixedCoreKC?: string,
+  fixedStimulusType?: Exclude<AIGStimulusType, "auto">
 ): string | null {
   const baseError = validateItem(parsed);
   if (baseError) return baseError;
 
   const item = parsed as Record<string, unknown>;
+  const asset = item.stimulus_asset as Record<string, unknown>;
+  if (fixedStimulusType && asset.type !== fixedStimulusType) {
+    return `stimulus_asset.type must equal the preselected stimulus type: "${fixedStimulusType}"`;
+  }
+
   const normalizedCode = (value: unknown): string | null => {
     if (typeof value !== "string") return null;
     if (standardKCCodes.includes(value)) return value;
@@ -520,7 +540,8 @@ export async function generateKeystoneDirectItem(
       parsed,
       standard,
       standardKCs.map((kc) => kc.code),
-      options.fixedCoreKC
+      options.fixedCoreKC,
+      options.stimulusType === "auto" ? undefined : options.stimulusType
     ),
     model,
     temperature
@@ -771,12 +792,15 @@ export async function runAIGMethod(
   const maxAttempts = review.styleCheckEnabled && review.retryEnabled
     ? Math.max(1, Math.min(5, Math.floor(review.maxAttempts || 1)))
     : 1;
-  const runOptions: AIGRunOptions = method.selectCoreKCBeforeRun && !options.fixedCoreKC
-    ? {
-        ...options,
-        fixedCoreKC: selectRandomKC(getKCsByStandard(standard)).code,
-      }
-    : options;
+  const runOptions: AIGRunOptions = {
+    ...options,
+    ...(method.selectCoreKCBeforeRun && !options.fixedCoreKC
+      ? { fixedCoreKC: selectRandomKC(getKCsByStandard(standard)).code }
+      : {}),
+    ...(options.stimulusType === "auto"
+      ? { stimulusType: selectRandomStimulusType() }
+      : {}),
+  };
 
   const attempts: MethodRunResult["attempts"] = [];
   let revisionInstructions: string | undefined;

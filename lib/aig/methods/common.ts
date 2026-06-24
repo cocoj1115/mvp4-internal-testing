@@ -32,7 +32,7 @@ export function notebookStimulusLabel(stimulusType: AIGStimulusType): string {
 
 export function forcedStimulusInstruction(options?: AIGRunOptions): string {
   if (!options || options.stimulusType === "auto") {
-    return "Choose the stimulus type that best fits the item.";
+    return "Use the stimulus type preselected by the app. Do not use 'none'.";
   }
   return `You MUST use stimulus type "${stimulusLabel(options.stimulusType)}". Do not choose a different stimulus type.`;
 }
