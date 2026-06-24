@@ -8,7 +8,7 @@ export function stimulusLabel(stimulusType: AIGStimulusType): string {
     table: "table",
     line_graph: "line graph",
     bar_chart: "bar graph",
-    diagram: "diagram spec (text-only)",
+    diagram: "diagram",
     scenario: "scenario description",
     illustration: "illustration",
     none: "none",

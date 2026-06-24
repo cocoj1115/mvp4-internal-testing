@@ -195,6 +195,7 @@ const REQUIRED_BP_KEYS = [
   "cognitive_demand",
   "key_concepts",
   "task_sequence",
+  "stimulus_type",
   "evidence_pattern",
   "expected_response_elements",
   "common_incomplete_responses",
@@ -204,7 +205,8 @@ function validateBlueprint(
   parsed: unknown,
   taxonomyTypes: string[],
   standardKCCodes: string[],
-  fixedCoreKC?: string
+  fixedCoreKC?: string,
+  fixedStimulusType?: string
 ): string | null {
   if (!parsed || typeof parsed !== "object") return "Response is not an object";
   const bp = parsed as Record<string, unknown>;
@@ -235,6 +237,16 @@ function validateBlueprint(
   }
 
   const validKCCodes = new Set<string>([coreKC, ...((supporting as string[] | undefined) ?? [])]);
+
+  if (typeof bp.stimulus_type !== "string" || !VALID_STIMULUS_TYPES.has(bp.stimulus_type)) {
+    return `stimulus_type must be one of: ${Array.from(VALID_STIMULUS_TYPES).join(", ")}`;
+  }
+  if (fixedStimulusType && bp.stimulus_type !== fixedStimulusType) {
+    return `stimulus_type must equal the requested stimulus type: "${fixedStimulusType}"`;
+  }
+  if (!fixedStimulusType && bp.stimulus_type === "none") {
+    return "stimulus_type must not be none for method2 blueprints";
+  }
 
   const seq = bp.task_sequence as Record<string, { kc_code?: string; task_type?: string } | undefined>;
   if (!seq["Part A"]) return `Missing "Part A" in task_sequence`;
@@ -324,6 +336,19 @@ function validateItem(parsed: unknown): string | null {
   ) {
     return "scoring_rubric contains unresolved placeholder text";
   }
+  return null;
+}
+
+function validateItemForBlueprint(parsed: unknown, blueprint: Blueprint): string | null {
+  const baseError = validateItem(parsed);
+  if (baseError) return baseError;
+
+  const item = parsed as Record<string, unknown>;
+  const asset = item.stimulus_asset as Record<string, unknown>;
+  if (asset.type !== blueprint.stimulus_type) {
+    return `stimulus_asset.type must equal blueprint stimulus_type: "${blueprint.stimulus_type}"`;
+  }
+
   return null;
 }
 
@@ -445,10 +470,13 @@ export async function generateBlueprint(
   const taxonomyTypes = Object.keys(ctx.taxonomyRows);
   const standardKCCodes = ctx.standardKCs.map((kc) => kc.code);
   const fixedCoreKC = ctx.selectedCoreKC?.code;
+  const fixedStimulusType = options?.stimulusType && options.stimulusType !== "auto"
+    ? options.stimulusType
+    : undefined;
   return callWithRetry<Blueprint>(
     system,
     user,
-    (p) => validateBlueprint(p, taxonomyTypes, standardKCCodes, fixedCoreKC),
+    (p) => validateBlueprint(p, taxonomyTypes, standardKCCodes, fixedCoreKC, fixedStimulusType),
     model,
     temperature
   );
@@ -468,7 +496,7 @@ export async function generateItem(
   return callWithRetry<GeneratedItem>(
     system,
     user,
-    validateItem,
+    (parsed) => validateItemForBlueprint(parsed, bp),
     model,
     temperature
   );

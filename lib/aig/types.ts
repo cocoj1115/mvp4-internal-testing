@@ -82,6 +82,7 @@ export interface Blueprint {
     "Part B": BlueprintTaskPart;
     "Part C"?: BlueprintTaskPart;
   };
+  stimulus_type: StimulusAssetType;
   evidence_pattern: string;
   expected_response_elements: string[];
   common_incomplete_responses: string[];

@@ -870,6 +870,10 @@ export default function AIGPage() {
                 >
                   <Field label="Target Standard" value={result.blueprint.target_standard} />
                   <Field label="Cognitive Demand" value={result.blueprint.cognitive_demand} />
+                  <Field
+                    label="Blueprint Stimulus Type"
+                    value={getStimulusTypeLabel(result.blueprint.stimulus_type)}
+                  />
                 </div>
                 <Field label="Core KC" value={result.blueprint.core_kc} />
                 {result.blueprint.supporting_kcs && result.blueprint.supporting_kcs.length > 0 && (
