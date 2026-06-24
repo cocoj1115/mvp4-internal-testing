@@ -330,7 +330,8 @@ function validateItem(parsed: unknown): string | null {
 function validateDirectItemKCSelection(
   parsed: unknown,
   targetStandard: string,
-  standardKCCodes: string[]
+  standardKCCodes: string[],
+  fixedCoreKC?: string
 ): string | null {
   const baseError = validateItem(parsed);
   if (baseError) return baseError;
@@ -352,6 +353,9 @@ function validateDirectItemKCSelection(
   const coreKC = normalizedCode(rawCoreKC);
   if (!coreKC) {
     return `core_kc must be a valid KC code under this standard: "${String(rawCoreKC)}"`;
+  }
+  if (fixedCoreKC && coreKC !== fixedCoreKC) {
+    return `core_kc must equal the preselected core KC: "${fixedCoreKC}"`;
   }
   item.core_kc = coreKC;
 
@@ -484,7 +488,12 @@ export async function generateKeystoneDirectItem(
   return callWithRetry<GeneratedItem>(
     system,
     user,
-    (parsed) => validateDirectItemKCSelection(parsed, standard, standardKCs.map((kc) => kc.code)),
+    (parsed) => validateDirectItemKCSelection(
+      parsed,
+      standard,
+      standardKCs.map((kc) => kc.code),
+      options.fixedCoreKC
+    ),
     model,
     temperature
   );
@@ -835,6 +844,7 @@ export const AIG_METHODS: Record<string, AIGMethod> = {
   },
   method_simple_direct: {
     label: "Simple Direct",
+    selectCoreKCBeforeRun: true,
     async run(standard, model, temperature, options) {
       const item = await generateKeystoneDirectItem(standard, model, temperature, options);
       return { item, grounding: emptyGrounding() };

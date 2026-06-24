@@ -104,6 +104,17 @@ export function buildKeystoneDirectPrompt(
   const kcLines = ctx.standardKCs
     .map((kc) => `  - ${kc.code} (${kc.kcId}): ${kc.statement}\n    Vocabulary: ${kc.vocab.join(", ")}`)
     .join("\n");
+  const fixedCoreKC = options.fixedCoreKC
+    ? ctx.standardKCs.find((kc) => kc.code === options.fixedCoreKC)
+    : undefined;
+  const fixedCoreSection = fixedCoreKC
+    ? [
+        `Preselected core KC: ${fixedCoreKC.code}`,
+        `Statement: ${fixedCoreKC.statement}`,
+        `Vocabulary: ${fixedCoreKC.vocab.join(", ") || "(none)"}`,
+        "The JSON core_kc value must exactly match this preselected core KC.",
+      ].join("\n")
+    : "No preselected core KC. Select one core_kc from the KC list below.";
   const vocab = Array.from(new Set(ctx.standardKCs.flatMap((kc) => kc.vocab))).join(", ");
 
   const schema = {
@@ -147,12 +158,15 @@ export function buildKeystoneDirectPrompt(
     `PA STEELS Standard: ${ctx.standard}`,
     `Module: ${moduleCode}`,
     "",
-    "Before writing the item, choose the KC focus explicitly:",
-    "  - Select EXACTLY ONE core_kc from the KCs listed below as the primary assessed concept.",
+    "Before writing the item, use the KC focus explicitly:",
+    "  - Use the preselected core KC below as the primary assessed concept.",
     "  - You may include 0-2 supporting_kcs from the same standard if they genuinely support the item.",
     "  - Return the full KC code shown before the parentheses, not the short local ID in parentheses.",
     "  - Example: return '3.1.9-12.B4', not 'B4'.",
     "  - Keep the item mainly focused on the selected core_kc.",
+    "",
+    "Preselected Core KC:",
+    fixedCoreSection,
     "",
     "Knowledge Components in scope:",
     kcLines,
