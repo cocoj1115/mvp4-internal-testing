@@ -10,6 +10,7 @@ import { buildBlueprintPrompt, buildItemPrompt, buildKeystoneDirectPrompt } from
 import { generateIllustrationB64 } from "./illustration";
 import type {
   AIGRunOptions,
+  AIGStimulusType,
   Card,
   ContextPack,
   Blueprint,
@@ -22,6 +23,45 @@ import type {
 function vocabOverlap(text: string, vocab: string[]): number {
   const lower = text.toLowerCase();
   return vocab.filter((v) => lower.includes(v.toLowerCase())).length;
+}
+
+function sampleWithoutReplacement<T>(items: T[], count: number): T[] {
+  const pool = [...items];
+  const selected: T[] = [];
+  while (pool.length > 0 && selected.length < count) {
+    const index = Math.floor(Math.random() * pool.length);
+    selected.push(pool[index]);
+    pool.splice(index, 1);
+  }
+  return selected;
+}
+
+function selectRandomKC(standardKCs: ContextPack["standardKCs"]): ContextPack["standardKCs"][number] {
+  if (standardKCs.length === 0) {
+    throw new Error("Cannot select a core KC because the standard has no KCs.");
+  }
+  return standardKCs[Math.floor(Math.random() * standardKCs.length)];
+}
+
+const RANDOM_STIMULUS_TYPES: Exclude<AIGStimulusType, "auto" | "none">[] = [
+  "table",
+  "line_graph",
+  "bar_chart",
+  "diagram",
+  "scenario",
+  "illustration",
+];
+
+function selectRandomStimulusType(): Exclude<AIGStimulusType, "auto" | "none"> {
+  return RANDOM_STIMULUS_TYPES[Math.floor(Math.random() * RANDOM_STIMULUS_TYPES.length)];
+}
+
+function selectStudyGuideChunksForCoreKC(
+  chunks: Array<{ chunk_id: string; text: string; score: number }>
+): Array<{ chunk_id: string; text: string; score: number }> {
+  const fixed = chunks.slice(0, 2);
+  const randomized = sampleWithoutReplacement(chunks.slice(2, 8), 2);
+  return [...fixed, ...randomized].sort((a, b) => b.score - a.score);
 }
 
 // ── assembleContext ───────────────────────────────────────────────────────────
@@ -93,6 +133,74 @@ export async function assembleContext(standard: string): Promise<ContextPack> {
   };
 }
 
+export async function assembleContextForCoreKC(
+  standard: string,
+  coreKCCode: string
+): Promise<ContextPack> {
+  const taxonomy = getTaxonomy();
+  const allCards = getCards();
+  const { item_specific: itemRubrics } = getRubrics();
+  const standardKCs = getKCsByStandard(standard);
+  const selectedCoreKC = standardKCs.find((kc) => kc.code === coreKCCode);
+
+  if (!selectedCoreKC) {
+    throw new Error(`Core KC "${coreKCCode}" is not valid for standard "${standard}".`);
+  }
+
+  const coreVocab = Array.from(new Set(selectedCoreKC.vocab));
+  const queryParts = [selectedCoreKC.statement, ...coreVocab].filter(Boolean);
+  const studyGuideQuery = queryParts.join(". ");
+  const candidateChunks = await retrieveStudyGuide(studyGuideQuery, 8, 0.25);
+  const studyGuideChunks = selectStudyGuideChunksForCoreKC(candidateChunks);
+
+  const { getABCPriors } = await import("./data");
+  const priors = getABCPriors();
+  const priorTypes = new Set(priors.flatMap((p) => p.sequence));
+
+  const relatedCards: Card[] = allCards
+    .map((c) => ({
+      card: c,
+      score: vocabOverlap(c.prompt, coreVocab) * 3 + (priorTypes.has(c.primary_type) ? 1 : 0),
+    }))
+    .filter((sc) => sc.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 12)
+    .map((sc) => sc.card);
+
+  const matched = itemRubrics.filter(
+    (r) =>
+      r.alignment === standard ||
+      vocabOverlap(r.scoring_guideline, coreVocab) >= 2
+  );
+  const relevantRubrics = matched.length > 0 ? matched : itemRubrics;
+
+  const grounding = {
+    study_guide: {
+      empty: studyGuideChunks.length === 0,
+      chunk_ids: studyGuideChunks.map((c) => c.chunk_id),
+    },
+    rubric: {
+      empty: relevantRubrics.length === 0,
+      items: relevantRubrics.map((r) => r.item),
+    },
+    cards: {
+      empty: relatedCards.length === 0,
+      card_ids: relatedCards.map((c) => c.card_id),
+    },
+  };
+
+  return {
+    standard,
+    standardKCs,
+    selectedCoreKC,
+    studyGuideChunks,
+    relatedCards,
+    taxonomyRows: taxonomy,
+    relevantRubrics,
+    grounding,
+  };
+}
+
 // ── Validation ────────────────────────────────────────────────────────────────
 
 const REQUIRED_BP_KEYS = [
@@ -101,6 +209,7 @@ const REQUIRED_BP_KEYS = [
   "cognitive_demand",
   "key_concepts",
   "task_sequence",
+  "stimulus_type",
   "evidence_pattern",
   "expected_response_elements",
   "common_incomplete_responses",
@@ -109,7 +218,9 @@ const REQUIRED_BP_KEYS = [
 function validateBlueprint(
   parsed: unknown,
   taxonomyTypes: string[],
-  standardKCCodes: string[]
+  standardKCCodes: string[],
+  fixedCoreKC?: string,
+  fixedStimulusType?: string
 ): string | null {
   if (!parsed || typeof parsed !== "object") return "Response is not an object";
   const bp = parsed as Record<string, unknown>;
@@ -122,6 +233,9 @@ function validateBlueprint(
   if (typeof coreKC !== "string" || !standardKCCodes.includes(coreKC)) {
     return `core_kc must be a valid KC code under this standard: "${coreKC}"`;
   }
+  if (fixedCoreKC && coreKC !== fixedCoreKC) {
+    return `core_kc must equal the preselected core KC: "${fixedCoreKC}"`;
+  }
 
   const supporting = bp.supporting_kcs;
   if (supporting !== undefined) {
@@ -130,10 +244,23 @@ function validateBlueprint(
       if (!standardKCCodes.includes(code)) {
         return `supporting_kcs contains unknown KC code: "${code}"`;
       }
+      if (code === coreKC) {
+        return "supporting_kcs must not repeat core_kc";
+      }
     }
   }
 
   const validKCCodes = new Set<string>([coreKC, ...((supporting as string[] | undefined) ?? [])]);
+
+  if (typeof bp.stimulus_type !== "string" || !VALID_STIMULUS_TYPES.has(bp.stimulus_type)) {
+    return `stimulus_type must be one of: ${Array.from(VALID_STIMULUS_TYPES).join(", ")}`;
+  }
+  if (fixedStimulusType && bp.stimulus_type !== fixedStimulusType) {
+    return `stimulus_type must equal the requested stimulus type: "${fixedStimulusType}"`;
+  }
+  if (!fixedStimulusType && bp.stimulus_type === "none") {
+    return "stimulus_type must not be none for method2 blueprints";
+  }
 
   const seq = bp.task_sequence as Record<string, { kc_code?: string; task_type?: string } | undefined>;
   if (!seq["Part A"]) return `Missing "Part A" in task_sequence`;
@@ -164,6 +291,11 @@ const VALID_STIMULUS_TYPES = new Set([
   "illustration",
   "none",
 ]);
+
+function containsRubricPlaceholder(text: unknown): boolean {
+  if (typeof text !== "string") return false;
+  return /\[[^\]]+\]/.test(text) || /<[^>]+>/.test(text);
+}
 
 function validateItem(parsed: unknown): string | null {
   if (!parsed || typeof parsed !== "object") return "Response is not an object";
@@ -205,10 +337,94 @@ function validateItem(parsed: unknown): string | null {
   if (!rubric["3"] || !rubric["2"] || !rubric["1"] || !rubric["0"]) {
     return `scoring_rubric must have keys "0", "1", "2", "3"`;
   }
+  for (const score of ["3", "2", "1", "0"] as const) {
+    if (typeof rubric[score] !== "string") {
+      return `scoring_rubric.${score} must be a string`;
+    }
+  }
+  if (
+    containsRubricPlaceholder(rubric["3"]) ||
+    containsRubricPlaceholder(rubric["2"]) ||
+    containsRubricPlaceholder(rubric["1"]) ||
+    containsRubricPlaceholder(rubric["0"])
+  ) {
+    return "scoring_rubric contains unresolved placeholder text";
+  }
   return null;
 }
 
-// ── LLM call with 1 retry ─────────────────────────────────────────────────────
+function validateItemForBlueprint(parsed: unknown, blueprint: Blueprint): string | null {
+  const baseError = validateItem(parsed);
+  if (baseError) return baseError;
+
+  const item = parsed as Record<string, unknown>;
+  const asset = item.stimulus_asset as Record<string, unknown>;
+  if (asset.type !== blueprint.stimulus_type) {
+    return `stimulus_asset.type must equal blueprint stimulus_type: "${blueprint.stimulus_type}"`;
+  }
+
+  return null;
+}
+
+function validateDirectItemKCSelection(
+  parsed: unknown,
+  targetStandard: string,
+  standardKCCodes: string[],
+  fixedCoreKC?: string,
+  fixedStimulusType?: Exclude<AIGStimulusType, "auto">
+): string | null {
+  const baseError = validateItem(parsed);
+  if (baseError) return baseError;
+
+  const item = parsed as Record<string, unknown>;
+  const asset = item.stimulus_asset as Record<string, unknown>;
+  if (fixedStimulusType && asset.type !== fixedStimulusType) {
+    return `stimulus_asset.type must equal the preselected stimulus type: "${fixedStimulusType}"`;
+  }
+
+  const normalizedCode = (value: unknown): string | null => {
+    if (typeof value !== "string") return null;
+    if (standardKCCodes.includes(value)) return value;
+    return standardKCCodes.find((code) => code.endsWith(value)) ?? null;
+  };
+
+  if (item.target_standard !== undefined) {
+    if (typeof item.target_standard !== "string" || item.target_standard !== targetStandard) {
+      return `target_standard must exactly match the requested standard: "${targetStandard}"`;
+    }
+  }
+
+  const rawCoreKC = item.core_kc;
+  const coreKC = normalizedCode(rawCoreKC);
+  if (!coreKC) {
+    return `core_kc must be a valid KC code under this standard: "${String(rawCoreKC)}"`;
+  }
+  if (fixedCoreKC && coreKC !== fixedCoreKC) {
+    return `core_kc must equal the preselected core KC: "${fixedCoreKC}"`;
+  }
+  item.core_kc = coreKC;
+
+  const supporting = item.supporting_kcs;
+  if (supporting !== undefined) {
+    if (!Array.isArray(supporting)) return "supporting_kcs must be an array";
+    const normalizedSupporting: string[] = [];
+    for (const code of supporting as unknown[]) {
+      const normalized = normalizedCode(code);
+      if (!normalized) {
+        return `supporting_kcs contains unknown KC code: "${String(code)}"`;
+      }
+      if (normalized === coreKC) {
+        return "supporting_kcs must not repeat core_kc";
+      }
+      normalizedSupporting.push(normalized);
+    }
+    item.supporting_kcs = normalizedSupporting;
+  }
+
+  return null;
+}
+
+// ── LLM call with schema-aware retries ───────────────────────────────────────
 
 async function callWithRetry<T>(
   system: string,
@@ -238,18 +454,28 @@ async function callWithRetry<T>(
     return res.content;
   };
 
-  const content1 = await call(user);
-  const { value: parsed1, error: parseErr1 } = tryParse(content1);
-  const error1 = parseErr1 ?? validate(parsed1);
-  if (!error1) return parsed1 as T;
+  let lastError = "Unknown validation error";
 
-  const content2 = await call(
-    `${user}\n\nPREVIOUS ATTEMPT FAILED: ${error1}\nPlease fix and return corrected JSON.`
-  );
-  const { value: parsed2, error: parseErr2 } = tryParse(content2);
-  const error2 = parseErr2 ?? validate(parsed2);
-  if (!error2) return parsed2 as T;
-  throw new Error(`AIG generation failed after retry: ${error2}`);
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const userMsg = attempt === 1
+      ? user
+      : [
+          user,
+          "",
+          `PREVIOUS ATTEMPT FAILED: ${lastError}`,
+          "Return corrected JSON only.",
+          "Do not omit any required keys from the schema.",
+          "If a key was missing, include it explicitly even if the value feels obvious.",
+        ].join("\n");
+
+    const content = await call(userMsg);
+    const { value: parsed, error: parseErr } = tryParse(content);
+    const validationError = parseErr ?? validate(parsed);
+    if (!validationError) return parsed as T;
+    lastError = validationError;
+  }
+
+  throw new Error(`AIG generation failed after retry: ${lastError}`);
 }
 
 // ── generateBlueprint ─────────────────────────────────────────────────────────
@@ -263,10 +489,14 @@ export async function generateBlueprint(
   const { system, user } = buildBlueprintPrompt(ctx, options);
   const taxonomyTypes = Object.keys(ctx.taxonomyRows);
   const standardKCCodes = ctx.standardKCs.map((kc) => kc.code);
+  const fixedCoreKC = ctx.selectedCoreKC?.code;
+  const fixedStimulusType = options?.stimulusType && options.stimulusType !== "auto"
+    ? options.stimulusType
+    : undefined;
   return callWithRetry<Blueprint>(
     system,
     user,
-    (p) => validateBlueprint(p, taxonomyTypes, standardKCCodes),
+    (p) => validateBlueprint(p, taxonomyTypes, standardKCCodes, fixedCoreKC, fixedStimulusType),
     model,
     temperature
   );
@@ -286,7 +516,7 @@ export async function generateItem(
   return callWithRetry<GeneratedItem>(
     system,
     user,
-    validateItem,
+    (parsed) => validateItemForBlueprint(parsed, bp),
     model,
     temperature
   );
@@ -306,7 +536,13 @@ export async function generateKeystoneDirectItem(
   return callWithRetry<GeneratedItem>(
     system,
     user,
-    validateItem,
+    (parsed) => validateDirectItemKCSelection(
+      parsed,
+      standard,
+      standardKCs.map((kc) => kc.code),
+      options.fixedCoreKC,
+      options.stimulusType === "auto" ? undefined : options.stimulusType
+    ),
     model,
     temperature
   );
@@ -497,6 +733,7 @@ export interface MethodRunResult {
 
 export interface AIGMethod {
   label: string;
+  selectCoreKCBeforeRun?: boolean;
   run(
     standard: string,
     model: string,
@@ -555,6 +792,15 @@ export async function runAIGMethod(
   const maxAttempts = review.styleCheckEnabled && review.retryEnabled
     ? Math.max(1, Math.min(5, Math.floor(review.maxAttempts || 1)))
     : 1;
+  const runOptions: AIGRunOptions = {
+    ...options,
+    ...(method.selectCoreKCBeforeRun && !options.fixedCoreKC
+      ? { fixedCoreKC: selectRandomKC(getKCsByStandard(standard)).code }
+      : {}),
+    ...(options.stimulusType === "auto"
+      ? { stimulusType: selectRandomStimulusType() }
+      : {}),
+  };
 
   const attempts: MethodRunResult["attempts"] = [];
   let revisionInstructions: string | undefined;
@@ -563,7 +809,7 @@ export async function runAIGMethod(
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const result = await method.run(standard, model, temperature, {
-      ...options,
+      ...runOptions,
       revisionInstructions,
     });
     const resultWithAsset = await attachGeneratedIllustration(result);
@@ -639,8 +885,10 @@ export async function runAIGMethod(
 export const AIG_METHODS: Record<string, AIGMethod> = {
   method_blueprint_l3: {
     label: "Blueprint + TELeR L3",
+    selectCoreKCBeforeRun: true,
     async run(standard, model, temperature, options) {
-      const ctx = await assembleContext(standard);
+      const coreKC = options.fixedCoreKC ?? selectRandomKC(getKCsByStandard(standard)).code;
+      const ctx = await assembleContextForCoreKC(standard, coreKC);
       const blueprint = await generateBlueprint(ctx, model, temperature, options);
       const item = await generateItem(blueprint, ctx, model, temperature, 3, options);
       return { blueprint, item, grounding: ctx.grounding };
@@ -648,6 +896,7 @@ export const AIG_METHODS: Record<string, AIGMethod> = {
   },
   method_simple_direct: {
     label: "Simple Direct",
+    selectCoreKCBeforeRun: true,
     async run(standard, model, temperature, options) {
       const item = await generateKeystoneDirectItem(standard, model, temperature, options);
       return { item, grounding: emptyGrounding() };

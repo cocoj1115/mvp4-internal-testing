@@ -7,6 +7,88 @@ function vocabOverlap(text: string, vocab: string[]): number {
   return vocab.filter((v) => lower.includes(v.toLowerCase())).length;
 }
 
+function stimulusGenerationRules(type: Blueprint["stimulus_type"]): string[] {
+  const common = [
+    "For every stimulus type except 'none', provide stimulus_asset.title as a short Keystone-style figure title.",
+    "The title should be a concise noun phrase such as 'Investigation Setup', 'Seed Production', or 'Heart Rate of a Black Bear'.",
+    "All stimuli must use a black-and-white worksheet style: black, white, and gray only, no color, no decorative gradients, no shadows.",
+    `Use exactly stimulus_asset.type="${type}". Do not choose a different stimulus type.`,
+  ];
+
+  if (type === "table") {
+    return [
+      ...common,
+      "Provide table_markdown as a GFM table with concise column headers and specific values.",
+      "Use table when condition/value data or categorical measurements are the evidence students should cite.",
+      "Only populate table_markdown; omit chart_data, diagram_spec, scenario_text, and illustration_prompt.",
+    ];
+  }
+
+  if (type === "line_graph") {
+    return [
+      ...common,
+      "Provide chart_data for a line graph with clear x_label, y_label, and at least 3 labeled points.",
+      "Use line_graph for trends over time, dose, temperature, concentration, or another continuous variable.",
+      "Only populate chart_data; omit table_markdown, diagram_spec, scenario_text, and illustration_prompt.",
+    ];
+  }
+
+  if (type === "bar_chart") {
+    return [
+      ...common,
+      "Provide chart_data for a bar chart comparing discrete categories, groups, treatments, or conditions.",
+      "Use concise category labels and realistic numeric values.",
+      "Only populate chart_data; omit table_markdown, diagram_spec, scenario_text, and illustration_prompt.",
+    ];
+  }
+
+  if (type === "scenario") {
+    return [
+      ...common,
+      "Provide scenario_text with 3-5 sentences, named organisms or context, and at least one concrete observation or measurement.",
+      "Use scenario when qualitative evidence is enough and a chart/diagram would be artificial.",
+      "Only populate scenario_text; omit table_markdown, chart_data, diagram_spec, and illustration_prompt.",
+    ];
+  }
+
+  if (type === "diagram") {
+    return [
+      ...common,
+      "Provide diagram_spec as a complete SVG string for a simple flowchart, cycle, structure, or pathway schematic.",
+      "Use ONLY when the structure is simple enough to represent clearly with boxes/circles/arrows.",
+      "Start with <svg width='540' height='320' xmlns='http://www.w3.org/2000/svg'>.",
+      "The SVG must be self-contained and valid with no prose before or after it.",
+      "Do NOT include the title text inside the SVG; the app renders the title above the figure.",
+      "Use black, white, and gray only. No colored fills or colored strokes.",
+      "Use <rect>, <circle>, <path>, <line>, <polygon>, <text>, and <marker> for arrows.",
+      "Do NOT include <script> or event handlers.",
+      "LAYOUT RULES - strictly follow to avoid overlapping elements:",
+      "  - Keep all elements within x in [10,530] and y in [10,310]. Never place anything outside this.",
+      "  - Space nodes at least 80px apart center-to-center.",
+      "  - Place each text label at the CENTER of its shape using text-anchor='middle' and dominant-baseline='middle'.",
+      "  - If a label exceeds 12 characters, split it into two <tspan> lines.",
+      "  - Use rectangles or ellipses for multi-word labels. Avoid circles for long labels.",
+      "  - Arrow lines must start and end OUTSIDE the shape border, not at the center.",
+      "Only populate diagram_spec; omit table_markdown, chart_data, scenario_text, and illustration_prompt.",
+    ];
+  }
+
+  if (type === "illustration") {
+    return [
+      ...common,
+      "Provide illustration_prompt for a black-and-white Keystone exam figure on a plain white background.",
+      "Use illustration for complex biological visuals such as cells, organelles, organisms, tissues, habitats, or realistic molecular models.",
+      "Do NOT include a title inside the generated image; the app renders the title above the figure.",
+      "Only populate illustration_prompt; omit table_markdown, chart_data, diagram_spec, and scenario_text.",
+    ];
+  }
+
+  return [
+    ...common,
+    "Use no visual stimulus. Set stimulus_asset.type to none and provide no stimulus-specific fields.",
+  ];
+}
+
 export function buildBlueprintPrompt(
   ctx: ContextPack,
   options?: AIGRunOptions
@@ -14,6 +96,10 @@ export function buildBlueprintPrompt(
   system: string;
   user: string;
 } {
+  const fixedStimulusType = options?.stimulusType && options.stimulusType !== "auto"
+    ? options.stimulusType
+    : undefined;
+
   const system = [
     "You are an expert assessment designer for Pennsylvania Keystone Biology.",
     "Your task is to produce a blueprint for a constructed-response item that explores ONE core",
@@ -21,7 +107,9 @@ export function buildBlueprintPrompt(
     "",
     "INSTRUCTIONS:",
     "1. Review ALL KCs listed under the target standard.",
-    "2. SELECT ONE core KC to explore in depth across all parts (core_kc).",
+    ctx.selectedCoreKC
+      ? `2. Use the PRESELECTED core KC exactly as core_kc: ${ctx.selectedCoreKC.code}. Do not choose a different core_kc.`
+      : "2. SELECT ONE core KC to explore in depth across all parts (core_kc).",
     "   Parts A/B/C probe different facets or levels of that SAME core concept — not different topics.",
     "   You may list 0–2 other KCs from the same standard as supporting_kcs if they provide genuine",
     "   background context, but do NOT devote a whole part to a separate concept.",
@@ -50,6 +138,12 @@ export function buildBlueprintPrompt(
     "8. key_concepts from core_kc vocab + study-guide grounding. Do NOT invent biology.",
     "9. expected_response_elements and common_incomplete_responses grounded in core_kc and study guide.",
     `10. Stimulus constraint: ${forcedStimulusInstruction(options)}`,
+    fixedStimulusType
+      ? `11. Use the requested stimulus_type exactly: ${fixedStimulusType}. Do not choose a different stimulus_type.`
+      : "11. Use the app-provided stimulus_type. Do not use stimulus_type='none'.",
+    "12. EVERY top-level schema key is mandatory. Never omit any field shown in the JSON schema.",
+    "13. evidence_pattern is required on every response. It should briefly name the planned stimulus/evidence form,",
+    "    such as 'monochrome line graph of rate over time', 'black-and-white comparison table', or 'scenario with concrete observations'.",
     "",
     "OUTPUT: strict JSON only, no markdown, matching exactly:",
     JSON.stringify({
@@ -63,6 +157,7 @@ export function buildBlueprintPrompt(
         "Part B": { kc_code: "<core_kc or supporting_kc>", task_type: "<exact TYPE name, difficulty >= Part A, no annotation>", function: "<ONE mechanism or relationship — no 'and' chaining>" },
         "Part C": { kc_code: "<core_kc or supporting_kc>", task_type: "<exact TYPE name, difficulty >= Part B, no annotation>", function: "<ONE evaluation, prediction, or synthesis point>" },
       },
+      stimulus_type: fixedStimulusType ?? "<table|line_graph|bar_chart|scenario|diagram|illustration>",
       evidence_pattern: "<type of stimulus or evidence the item will use>",
       expected_response_elements: ["<specific element students must include>"],
       common_incomplete_responses: ["<typical student error or omission>"],
@@ -72,6 +167,15 @@ export function buildBlueprintPrompt(
   const kcListSection = ctx.standardKCs
     .map((kc) => `  ${kc.code}: ${kc.statement}\n    Vocab: ${kc.vocab.join(", ")}`)
     .join("\n");
+
+  const selectedCoreSection = ctx.selectedCoreKC
+    ? [
+        `Selected core KC: ${ctx.selectedCoreKC.code}`,
+        `Statement: ${ctx.selectedCoreKC.statement}`,
+        `Vocab: ${ctx.selectedCoreKC.vocab.join(", ") || "(none)"}`,
+        "The blueprint JSON core_kc value must exactly match this selected core KC.",
+      ].join("\n")
+    : "(No preselected core KC; choose one from the list above.)";
 
   const taxonomySection = Object.entries(ctx.taxonomyRows)
     .sort(([, a], [, b]) => a.difficulty - b.difficulty)
@@ -91,7 +195,9 @@ export function buildBlueprintPrompt(
     })
     .join("\n");
 
-  const combinedVocab = ctx.standardKCs.flatMap((kc) => kc.vocab);
+  const combinedVocab = ctx.selectedCoreKC?.vocab.length
+    ? ctx.selectedCoreKC.vocab
+    : ctx.standardKCs.flatMap((kc) => kc.vocab);
   const wholeItemSection = getWholeItems()
     .map((item) => ({
       item,
@@ -122,6 +228,9 @@ export function buildBlueprintPrompt(
     `KCs under this standard (${ctx.standardKCs.length} total):`,
     kcListSection,
     "",
+    "=== PRESELECTED CORE KC ===",
+    selectedCoreSection,
+    "",
     "=== 12 TAXONOMY TYPES (choose task_types only from these) ===",
     taxonomySection,
     "",
@@ -136,6 +245,7 @@ export function buildBlueprintPrompt(
     "",
     "=== STIMULUS CONSTRAINT ===",
     forcedStimulusInstruction(options),
+    fixedStimulusType ? `\n=== FIXED STIMULUS TYPE ===\n${fixedStimulusType}` : "",
     "",
     "Produce the blueprint JSON now.",
   ].join("\n");
@@ -184,47 +294,8 @@ export function buildItemPrompt(
     "",
     "ITEM WRITING RULES:",
     "1. Stem must set the biological context without giving away the answers.",
-    "2. Choose ONE stimulus asset type that best fits the evidence_pattern from the blueprint:",
-    "   For every stimulus type except 'none', provide stimulus_asset.title as a short Keystone-style figure title.",
-    "   The title should be a concise noun phrase such as 'Investigation Setup', 'Seed Production', or 'Heart Rate of a Black Bear'.",
-    "   All stimuli must use a black-and-white worksheet style: black, white, and gray only, no color, no decorative gradients, no shadows.",
-    "   - 'table': numerical or comparative data -> provide table_markdown (GFM format)",
-    "   - 'line_graph': trend over time/continuous variable -> provide chart_data",
-    "   - 'bar_chart': comparing discrete categories -> provide chart_data",
-    "   - 'scenario': a text-only stimulus with named organisms, conditions, and concrete observations -> provide scenario_text",
-    "   - 'diagram': simple flowchart, cycle, or molecular/pathway schematic that can be drawn",
-    "     with basic shapes and arrows -> provide diagram_spec as a complete SVG string.",
-    "     Use ONLY when the structure is simple enough to represent clearly with boxes/circles/arrows.",
-    "     Start with <svg width='540' height='320' xmlns='http://www.w3.org/2000/svg'>.",
-    "     The SVG must be self-contained and valid with no prose before or after it.",
-    "     Do NOT include the title text inside the SVG; the app renders the title above the figure.",
-    "     Use black, white, and gray only. No colored fills or colored strokes.",
-    "     Use <rect>, <circle>, <path>, <line>, <polygon>, <text>, and <marker> for arrows.",
-    "     Do NOT include <script> or event handlers.",
-    "     LAYOUT RULES — strictly follow to avoid overlapping elements:",
-    "       • Keep all elements within x in [10,530] and y in [10,310]. Never place anything outside this.",
-    "       • Space nodes at least 80px apart center-to-center. For a 3-node horizontal flow,",
-    "         use x=90, x=270, x=450; for vertical, y=60, y=160, y=260.",
-    "       • Place each text label at the CENTER of its shape: for <rect x='60' y='40' width='80' height='36'>,",
-    "         put <text x='100' y='62' text-anchor='middle' dominant-baseline='middle'>.",
-    "       • Keep each node label to one short phrase. If it exceeds 12 characters, split it into two <tspan> lines.",
-    "       • Use rectangles or ellipses for multi-word labels. Avoid circles for long labels.",
-    "       • Arrow lines must start and end OUTSIDE the shape border, not at the center.",
-    "         End the line 6px before the shape edge so the arrowhead is visible.",
-    "       • Do not stack text on top of shapes of a different element. If a label is long,",
-    "         break it into two <tspan> lines with dy='1.2em' for the second.",
-    "       • Do not place explanatory annotations inside a node unless they are part of the node label.",
-    "         Put side notes outside the node, or omit them if they cause crowding.",
-    "     Example arrow marker: <defs><marker id='a' markerWidth='8' markerHeight='6' refX='8' refY='3' orient='auto'><polygon points='0 0,8 3,0 6' fill='#374151'/></marker></defs>",
-    "     then use marker-end='url(#a)' on <line> or <path> elements.",
-    "   - 'illustration': use for ANY complex biological image — cell structures, organelles,",
-    "     organisms, tissues, habitats, realistic molecular models, anything that requires",
-    "     visual detail beyond simple shapes -> provide illustration_prompt. The app will automatically",
-    "     send this prompt to the image generation model.",
-    "     The illustration prompt must explicitly request a black-and-white exam figure on a plain white background.",
-    "     Do NOT include a title inside the image; the app renders the title above the figure.",
-    "   - 'none': purely textual item, no visual asset needed",
-    "   Only populate the field matching the type; leave others absent.",
+    `2. Use the blueprint stimulus_type exactly: ${bp.stimulus_type}.`,
+    ...stimulusGenerationRules(bp.stimulus_type).map((line) => `   ${line}`),
     "3. SINGLE-FOCUS RULE (critical — strictly enforced):",
     "   Each part asks for EXACTLY ONE thing. The student's answer converges on a single concept,",
     "   term, mechanism, or relationship. Do NOT chain sub-questions with 'and', 'also',",
@@ -238,10 +309,13 @@ export function buildItemPrompt(
     `5. Write ONE holistic 0-3 rubric for the whole item. The 3-point level lists ${partCount} bullets`,
     `   (one per part) joined by AND; 2 = ${partCount === 2 ? "ONE bullet (partial)" : "two bullets"}; 1 = ${partCount === 2 ? "partially addresses one bullet" : "one bullet"}; 0 = insufficient.`,
     "   Match the exact style of the anchors.",
+    "   IMPORTANT: the rubricTemplate shown in the schema is only a shape guide.",
+    "   You must replace every placeholder with concrete biology-specific credit criteria for THIS item.",
+    "   Do NOT output [bullet A], [bullet B], [bullet C], [Part A concept], or any other unresolved template text.",
     "6. Do NOT reveal expected answers in the stem, stimulus asset, or part questions.",
     "7. Ground all scientific content in the study-guide chunks and key concepts provided.",
     "   Do NOT invent biology outside those sources.",
-    `8. Stimulus constraint: ${forcedStimulusInstruction(options)}`,
+    `8. Stimulus type is fixed by the blueprint: ${bp.stimulus_type}.`,
     options?.revisionInstructions
       ? `9. Revision instructions from style check: ${options.revisionInstructions}`
       : "",
@@ -250,7 +324,7 @@ export function buildItemPrompt(
     JSON.stringify({
       stem: "<biological context sentence(s)>",
       stimulus_asset: {
-        type: "<table|line_graph|bar_chart|diagram|scenario|illustration|none>",
+        type: bp.stimulus_type,
         title: "<short Keystone-style figure title, 2-8 words>",
         table_markdown: "<GFM table string — only when type=table, else omit>",
         chart_data: {
@@ -302,8 +376,8 @@ export function buildItemPrompt(
     "=== EVIDENCE PATTERN ===",
     bp.evidence_pattern,
     "",
-    "=== STIMULUS CONSTRAINT ===",
-    forcedStimulusInstruction(options),
+    "=== FIXED STIMULUS TYPE ===",
+    bp.stimulus_type,
     "",
     telerLevel >= 4
       ? `=== EXPECTED RESPONSE ELEMENTS (TELeR L${telerLevel}) ===\n${bp.expected_response_elements.join("\n")}`

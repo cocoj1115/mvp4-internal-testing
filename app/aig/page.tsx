@@ -102,6 +102,11 @@ const STIMULUS_TYPES: Array<{ id: AIGStimulusType; label: string }> = [
   { id: "none", label: "None" },
 ];
 
+function getStimulusTypeLabel(type: AIGStimulusType | GeneratedItem["stimulus_asset"]["type"]): string {
+  const match = STIMULUS_TYPES.find((entry) => entry.id === type);
+  return match?.label ?? type;
+}
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function Section({
@@ -798,7 +803,14 @@ export default function AIGPage() {
             <Section title="Method Summary">
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0 }}>
                 <Field label="Method" value={resultContext?.methodLabel ?? selectedMethod?.label ?? methodId} />
-                <Field label="Requested Stimulus Type" value={resultContext?.stimulusType ?? stimulusType} />
+                <Field
+                  label="Requested Stimulus Type"
+                  value={getStimulusTypeLabel(resultContext?.stimulusType ?? stimulusType)}
+                />
+                <Field
+                  label="Generated Stimulus Type"
+                  value={getStimulusTypeLabel(result.item.stimulus_asset.type)}
+                />
                 <Field
                   label="Retrieval"
                   value={
@@ -822,6 +834,30 @@ export default function AIGPage() {
               </Section>
             )}
 
+            {!result.blueprint && result.item.core_kc && (
+              <Section title="KC Selection" accent>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 0,
+                  }}
+                >
+                  <Field
+                    label="Target Standard"
+                    value={result.item.target_standard ?? selectedStandard?.standard ?? standardCode}
+                  />
+                  <Field label="Core KC" value={result.item.core_kc} />
+                </div>
+                {result.item.supporting_kcs && result.item.supporting_kcs.length > 0 && (
+                  <Field
+                    label="Supporting KCs"
+                    value={result.item.supporting_kcs.join(" · ")}
+                  />
+                )}
+              </Section>
+            )}
+
             {/* Blueprint */}
             {result.blueprint && (
               <Section title="Blueprint" accent>
@@ -834,6 +870,10 @@ export default function AIGPage() {
                 >
                   <Field label="Target Standard" value={result.blueprint.target_standard} />
                   <Field label="Cognitive Demand" value={result.blueprint.cognitive_demand} />
+                  <Field
+                    label="Blueprint Stimulus Type"
+                    value={getStimulusTypeLabel(result.blueprint.stimulus_type)}
+                  />
                 </div>
                 <Field label="Core KC" value={result.blueprint.core_kc} />
                 {result.blueprint.supporting_kcs && result.blueprint.supporting_kcs.length > 0 && (

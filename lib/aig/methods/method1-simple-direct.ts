@@ -102,11 +102,25 @@ export function buildKeystoneDirectPrompt(
   const exemplars = getRelevantExemplars(ctx.standard, moduleCode, options.stimulusType);
   const exemplarSection = formatExemplarsForPrompt(exemplars);
   const kcLines = ctx.standardKCs
-    .map((kc) => `  - ${kc.kcId}: ${kc.statement}\n    Vocabulary: ${kc.vocab.join(", ")}`)
+    .map((kc) => `  - ${kc.code} (${kc.kcId}): ${kc.statement}\n    Vocabulary: ${kc.vocab.join(", ")}`)
     .join("\n");
+  const fixedCoreKC = options.fixedCoreKC
+    ? ctx.standardKCs.find((kc) => kc.code === options.fixedCoreKC)
+    : undefined;
+  const fixedCoreSection = fixedCoreKC
+    ? [
+        `Preselected core KC: ${fixedCoreKC.code}`,
+        `Statement: ${fixedCoreKC.statement}`,
+        `Vocabulary: ${fixedCoreKC.vocab.join(", ") || "(none)"}`,
+        "The JSON core_kc value must exactly match this preselected core KC.",
+      ].join("\n")
+    : "No preselected core KC. Select one core_kc from the KC list below.";
   const vocab = Array.from(new Set(ctx.standardKCs.flatMap((kc) => kc.vocab))).join(", ");
 
   const schema = {
+    target_standard: "<same PA STEELS standard code provided in the request>",
+    core_kc: "<ONE KC code selected as the primary concept focus for this item>",
+    supporting_kcs: ["<optional additional KC codes from the same standard used as support/background>"],
     stem: "<brief setup sentence(s) that introduce the task without giving away answers>",
     stimulus_asset: {
       type: "<table|line_graph|bar_chart|diagram|scenario|illustration|none>",
@@ -128,9 +142,9 @@ export function buildKeystoneDirectPrompt(
     },
     scoring_rubric: {
       points_possible: 3,
-      "3": "Thorough — by ALL of: [Part A concept] AND [Part B concept] AND [Part C concept]",
-      "2": "Partial — fulfilling TWO of the bullets",
-      "1": "Minimal — fulfilling ONE of the bullets",
+      "3": "Thorough — by ALL of: actual Part A biology criterion AND actual Part B biology criterion AND actual Part C biology criterion",
+      "2": "Partial — fulfilling any two of those actual biology criteria",
+      "1": "Minimal — fulfilling one actual biology criterion",
       "0": "Insufficient evidence",
     },
   };
@@ -143,6 +157,16 @@ export function buildKeystoneDirectPrompt(
     "Generate ONE Pennsylvania Keystone Biology short-answer question aligned to:",
     `PA STEELS Standard: ${ctx.standard}`,
     `Module: ${moduleCode}`,
+    "",
+    "Before writing the item, use the KC focus explicitly:",
+    "  - Use the preselected core KC below as the primary assessed concept.",
+    "  - You may include 0-2 supporting_kcs from the same standard if they genuinely support the item.",
+    "  - Return the full KC code shown before the parentheses, not the short local ID in parentheses.",
+    "  - Example: return '3.1.9-12.B4', not 'B4'.",
+    "  - Keep the item mainly focused on the selected core_kc.",
+    "",
+    "Preselected Core KC:",
+    fixedCoreSection,
     "",
     "Knowledge Components in scope:",
     kcLines,
@@ -158,6 +182,12 @@ export function buildKeystoneDirectPrompt(
     "  - clean textbook/worksheet look",
     "  - no decorative gradients, shadows, or artistic backgrounds",
     "  - simple labels and high contrast",
+    "Scoring rubric requirement:",
+    "  - Replace all rubric template text with concrete content specific to this item.",
+    "  - Do NOT leave placeholders such as [Part A concept], [Part B concept], [Part C concept], [bullet A], or angle-bracket template text.",
+    "  - The rubric must describe the actual biology ideas required for credit.",
+    "  - The 3-point rubric must explicitly name the actual Part A, Part B, and Part C credit criteria.",
+    "  - The scoring_rubric strings in the schema below are format examples only; do not copy them verbatim.",
     "If type='diagram', diagram_spec MUST be a complete inline SVG string, not prose.",
     "For diagram SVG output:",
     "  - Start with <svg width='540' height='320' xmlns='http://www.w3.org/2000/svg'>.",
