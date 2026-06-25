@@ -104,23 +104,32 @@ export function buildKeystoneDirectPrompt(
   const kcLines = ctx.standardKCs
     .map((kc) => `  - ${kc.code} (${kc.kcId}): ${kc.statement}\n    Vocabulary: ${kc.vocab.join(", ")}`)
     .join("\n");
-  const fixedCoreKC = options.fixedCoreKC
+  const fixedAnchorKC = options.fixedCoreKC
     ? ctx.standardKCs.find((kc) => kc.code === options.fixedCoreKC)
     : undefined;
-  const fixedCoreSection = fixedCoreKC
+  const fixedAnchorSection = fixedAnchorKC
     ? [
-        `Preselected core KC: ${fixedCoreKC.code}`,
-        `Statement: ${fixedCoreKC.statement}`,
-        `Vocabulary: ${fixedCoreKC.vocab.join(", ") || "(none)"}`,
-        "The JSON core_kc value must exactly match this preselected core KC.",
+        `Preselected anchor KC: ${fixedAnchorKC.code}`,
+        `Statement: ${fixedAnchorKC.statement}`,
+        `Vocabulary: ${fixedAnchorKC.vocab.join(", ") || "(none)"}`,
+        "The JSON anchor_kc value must exactly match this preselected anchor KC.",
       ].join("\n")
-    : "No preselected core KC. Select one core_kc from the KC list below.";
+    : "No preselected anchor KC. Select one anchor_kc from the KC list below.";
   const vocab = Array.from(new Set(ctx.standardKCs.flatMap((kc) => kc.vocab))).join(", ");
 
   const schema = {
     target_standard: "<same PA STEELS standard code provided in the request>",
-    core_kc: "<ONE KC code selected as the primary concept focus for this item>",
-    supporting_kcs: ["<optional additional KC codes from the same standard used as support/background>"],
+    anchor_kc: "<preselected anchor KC code; must be used in at least one part>",
+    core_kc: "<same value as anchor_kc, included for backward compatibility>",
+    selected_kcs: ["<all unique KC codes assigned to Part A/B/C; max 3 total>"],
+    supporting_kcs: ["<optional non-anchor KC codes assigned to at least one part; max 2>"],
+    part_kcs: {
+      "Part A": "<one KC code from selected_kcs>",
+      "Part B": "<one KC code from selected_kcs>",
+      "Part C": "<one KC code from selected_kcs>",
+    },
+    stem_affordance: "<brief description of the shared context/stimulus that makes these part KCs cohere>",
+    compatibility_rationale: "<brief reason the assigned KCs work naturally with one shared stem/stimulus>",
     stem: "<brief setup sentence(s) that introduce the task without giving away answers>",
     stimulus_asset: {
       type: "<table|line_graph|bar_chart|diagram|scenario|illustration|none>",
@@ -158,15 +167,24 @@ export function buildKeystoneDirectPrompt(
     `PA STEELS Standard: ${ctx.standard}`,
     `Module: ${moduleCode}`,
     "",
-    "Before writing the item, use the KC focus explicitly:",
-    "  - Use the preselected core KC below as the primary assessed concept.",
-    "  - You may include 0-2 supporting_kcs from the same standard if they genuinely support the item.",
+    "Before writing the item, assign a KC to each part explicitly:",
+    "  - Use only the Knowledge Components listed below.",
+    "  - Use the preselected anchor KC below in at least one of Part A, Part B, or Part C.",
+    "  - Assign exactly one KC code to each part in part_kcs.",
+    "  - It is acceptable for multiple parts to use the same KC.",
+    "  - It is acceptable for all parts to use the same KC.",
+    "  - If you assign non-anchor KCs, use at most two additional KCs.",
+    "  - All selected KCs must work naturally with one shared stem/stimulus.",
+    "  - Do not assign a KC to a part unless that part can be directly assessed from the same item context.",
+    "  - When assigning KCs to parts, preserve the A/B/C progression: Part A should target an entry point that can be assessed with a focused, convergent response; Part B should target a mechanism, relationship, or explanation; Part C should target transfer, prediction, evidence, design, or evaluation when the selected KCs support it.",
     "  - Return the full KC code shown before the parentheses, not the short local ID in parentheses.",
     "  - Example: return '3.1.9-12.B4', not 'B4'.",
-    "  - Keep the item mainly focused on the selected core_kc.",
+    "  - Set core_kc to the same value as anchor_kc for backward compatibility.",
+    "  - Set selected_kcs to the unique KC codes used in part_kcs.",
+    "  - Set supporting_kcs to the non-anchor KC codes used in part_kcs, if any.",
     "",
-    "Preselected Core KC:",
-    fixedCoreSection,
+    "Preselected Anchor KC:",
+    fixedAnchorSection,
     "",
     "Knowledge Components in scope:",
     kcLines,

@@ -834,7 +834,7 @@ export default function AIGPage() {
               </Section>
             )}
 
-            {!result.blueprint && result.item.core_kc && (
+            {!result.blueprint && (result.item.anchor_kc || result.item.core_kc) && (
               <Section title="KC Selection" accent>
                 <div
                   style={{
@@ -847,11 +847,17 @@ export default function AIGPage() {
                     label="Target Standard"
                     value={result.item.target_standard ?? selectedStandard?.standard ?? standardCode}
                   />
-                  <Field label="Core KC" value={result.item.core_kc} />
+                  <Field label="Anchor KC" value={result.item.anchor_kc ?? result.item.core_kc} />
                 </div>
+                {result.item.selected_kcs && result.item.selected_kcs.length > 0 && (
+                  <Field
+                    label="Selected KCs"
+                    value={result.item.selected_kcs.join(" · ")}
+                  />
+                )}
                 {result.item.supporting_kcs && result.item.supporting_kcs.length > 0 && (
                   <Field
-                    label="Supporting KCs"
+                    label="Non-anchor KCs"
                     value={result.item.supporting_kcs.join(" · ")}
                   />
                 )}
@@ -875,11 +881,29 @@ export default function AIGPage() {
                     value={getStimulusTypeLabel(result.blueprint.stimulus_type)}
                   />
                 </div>
-                <Field label="Core KC" value={result.blueprint.core_kc} />
+                <Field label="Anchor KC" value={result.blueprint.anchor_kc ?? result.blueprint.core_kc} />
+                {result.blueprint.selected_kcs && result.blueprint.selected_kcs.length > 0 && (
+                  <Field
+                    label="Selected KCs"
+                    value={result.blueprint.selected_kcs.join(" · ")}
+                  />
+                )}
                 {result.blueprint.supporting_kcs && result.blueprint.supporting_kcs.length > 0 && (
                   <Field
-                    label="Supporting KCs"
+                    label="Non-anchor KCs"
                     value={result.blueprint.supporting_kcs.join(" · ")}
+                  />
+                )}
+                {result.blueprint.stem_affordance && (
+                  <Field
+                    label="Stem Affordance"
+                    value={result.blueprint.stem_affordance}
+                  />
+                )}
+                {result.blueprint.compatibility_rationale && (
+                  <Field
+                    label="KC Compatibility"
+                    value={result.blueprint.compatibility_rationale}
                   />
                 )}
                 <Field
@@ -981,9 +1005,9 @@ export default function AIGPage() {
                     >
                       {result.item.parts[p]!.task_type}
                     </span>
-                    {result.blueprint?.task_sequence[p]?.kc_code && (
+                    {(result.blueprint?.task_sequence[p]?.kc_code || result.item.part_kcs?.[p]) && (
                       <span style={{ fontSize: 11, color: "#9ca3af" }}>
-                        {result.blueprint.task_sequence[p]!.kc_code}
+                        {result.blueprint?.task_sequence[p]?.kc_code ?? result.item.part_kcs?.[p]}
                       </span>
                     )}
                   </div>

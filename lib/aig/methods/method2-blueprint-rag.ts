@@ -102,21 +102,27 @@ export function buildBlueprintPrompt(
 
   const system = [
     "You are an expert assessment designer for Pennsylvania Keystone Biology.",
-    "Your task is to produce a blueprint for a constructed-response item that explores ONE core",
-    "Knowledge Component (KC) in depth — exactly as real Keystone sample items do.",
+    "Your task is to produce a blueprint for a constructed-response item aligned to ONE selected",
+    "standard, with exactly one Knowledge Component (KC) assigned to each part.",
     "",
     "INSTRUCTIONS:",
     "1. Review ALL KCs listed under the target standard.",
     ctx.selectedCoreKC
-      ? `2. Use the PRESELECTED core KC exactly as core_kc: ${ctx.selectedCoreKC.code}. Do not choose a different core_kc.`
-      : "2. SELECT ONE core KC to explore in depth across all parts (core_kc).",
-    "   Parts A/B/C probe different facets or levels of that SAME core concept — not different topics.",
-    "   You may list 0–2 other KCs from the same standard as supporting_kcs if they provide genuine",
-    "   background context, but do NOT devote a whole part to a separate concept.",
+      ? `2. Use the PRESELECTED anchor KC exactly as anchor_kc: ${ctx.selectedCoreKC.code}. Do not choose a different anchor_kc.`
+      : "2. SELECT ONE anchor KC from the KC list.",
+    "   The anchor KC must be used in at least one of Part A, Part B, or Part C.",
+    "   Assign exactly one KC code to each part in task_sequence.",
+    "   It is acceptable for multiple parts to use the same KC.",
+    "   It is acceptable for all parts to use the same KC.",
+    "   If you assign non-anchor KCs, use at most two additional KCs.",
+    "   All selected KCs must work naturally with one shared stem/stimulus.",
+    "   Do not assign a KC to a part unless that part can be directly assessed from the same item context.",
     "3. Decide part count: default to 3 parts (A, B, C). Use only 2 parts (A, B) only when",
-    "   the core KC does not naturally support a third coherent, non-redundant part.",
-    "4. Assign each part a kc_code. Default all parts to core_kc. A part may use a supporting_kc",
-    "   only if it genuinely deepens the same core concept rather than pivoting to a new topic.",
+    "   the selected KC combination does not naturally support a third coherent, non-redundant part.",
+    "4. KC choice must support the A/B/C progression: Part A should target an entry point that can",
+    "   be assessed with a focused, convergent response; Part B should target a mechanism, relationship,",
+    "   or explanation; Part C should target transfer, prediction, evidence, design, or evaluation when",
+    "   the selected KCs support it.",
     "5. DIFFICULTY RULES (use the Difficulty numbers shown per taxonomy type):",
     "   - task_type must be the exact TYPE name (e.g. 'Recall / Identify / Classify') — do NOT",
     "     append the difficulty number or any other text to the task_type value.",
@@ -134,9 +140,9 @@ export function buildBlueprintPrompt(
     "   - Part B / Part C may describe or explain, but still about ONE mechanism or concept in depth.",
     "   BAD Part B: 'explain how transcription works and how translation differs from it'",
     "   GOOD Part B: 'explain how the anticodon ensures the correct amino acid is added'",
-    "7. cognitive_demand: Low / Low-Mod / Moderate / High — from the core KC statement.",
-    "8. key_concepts from core_kc vocab + study-guide grounding. Do NOT invent biology.",
-    "9. expected_response_elements and common_incomplete_responses grounded in core_kc and study guide.",
+    "7. cognitive_demand: Low / Low-Mod / Moderate / High — from the assigned KCs and task sequence.",
+    "8. key_concepts from assigned KC vocab + study-guide grounding. Do NOT invent biology.",
+    "9. expected_response_elements and common_incomplete_responses grounded in assigned KCs and study guide.",
     `10. Stimulus constraint: ${forcedStimulusInstruction(options)}`,
     fixedStimulusType
       ? `11. Use the requested stimulus_type exactly: ${fixedStimulusType}. Do not choose a different stimulus_type.`
@@ -148,14 +154,18 @@ export function buildBlueprintPrompt(
     "OUTPUT: strict JSON only, no markdown, matching exactly:",
     JSON.stringify({
       target_standard: "<standard code e.g. 3.1.9-12.A>",
-      core_kc: "<one KC code — the single concept explored in depth>",
-      supporting_kcs: ["<optional: other KC codes from same standard used only as background>"],
+      anchor_kc: "<preselected anchor KC code; must be used in at least one part>",
+      core_kc: "<same value as anchor_kc, included for backward compatibility>",
+      selected_kcs: ["<all unique KC codes assigned to Part A/B/C; max 3 total>"],
+      supporting_kcs: ["<optional non-anchor KC codes assigned to at least one part; max 2>"],
+      stem_affordance: "<brief description of the shared context/stimulus that makes these part KCs cohere>",
+      compatibility_rationale: "<brief reason the assigned KCs work naturally with one shared stem/stimulus>",
       cognitive_demand: "<Low | Low-Mod | Moderate | High>",
-      key_concepts: ["<concept from core_kc vocab/study guide>"],
+      key_concepts: ["<concept from assigned KC vocab/study guide>"],
       task_sequence: {
-        "Part A": { kc_code: "<core_kc or supporting_kc>", task_type: "<exact TYPE name, difficulty 1-2, no annotation>", function: "<ONE single-focus target — one term/substance/structure>" },
-        "Part B": { kc_code: "<core_kc or supporting_kc>", task_type: "<exact TYPE name, difficulty >= Part A, no annotation>", function: "<ONE mechanism or relationship — no 'and' chaining>" },
-        "Part C": { kc_code: "<core_kc or supporting_kc>", task_type: "<exact TYPE name, difficulty >= Part B, no annotation>", function: "<ONE evaluation, prediction, or synthesis point>" },
+        "Part A": { kc_code: "<one selected KC code>", task_type: "<exact TYPE name, difficulty 1-2, no annotation>", function: "<ONE single-focus target — one term/substance/structure>" },
+        "Part B": { kc_code: "<one selected KC code>", task_type: "<exact TYPE name, difficulty >= Part A, no annotation>", function: "<ONE mechanism or relationship — no 'and' chaining>" },
+        "Part C": { kc_code: "<one selected KC code>", task_type: "<exact TYPE name, difficulty >= Part B, no annotation>", function: "<ONE evaluation, prediction, or synthesis point>" },
       },
       stimulus_type: fixedStimulusType ?? "<table|line_graph|bar_chart|scenario|diagram|illustration>",
       evidence_pattern: "<type of stimulus or evidence the item will use>",
@@ -170,12 +180,13 @@ export function buildBlueprintPrompt(
 
   const selectedCoreSection = ctx.selectedCoreKC
     ? [
-        `Selected core KC: ${ctx.selectedCoreKC.code}`,
+        `Selected anchor KC: ${ctx.selectedCoreKC.code}`,
         `Statement: ${ctx.selectedCoreKC.statement}`,
         `Vocab: ${ctx.selectedCoreKC.vocab.join(", ") || "(none)"}`,
-        "The blueprint JSON core_kc value must exactly match this selected core KC.",
+        "The blueprint JSON anchor_kc value must exactly match this selected anchor KC.",
+        "The blueprint JSON core_kc value must match anchor_kc for backward compatibility.",
       ].join("\n")
-    : "(No preselected core KC; choose one from the list above.)";
+    : "(No preselected anchor KC; choose one from the list above.)";
 
   const taxonomySection = Object.entries(ctx.taxonomyRows)
     .sort(([, a], [, b]) => a.difficulty - b.difficulty)
@@ -228,7 +239,7 @@ export function buildBlueprintPrompt(
     `KCs under this standard (${ctx.standardKCs.length} total):`,
     kcListSection,
     "",
-    "=== PRESELECTED CORE KC ===",
+    "=== PRESELECTED ANCHOR KC ===",
     selectedCoreSection,
     "",
     "=== 12 TAXONOMY TYPES (choose task_types only from these) ===",
@@ -304,7 +315,7 @@ export function buildItemPrompt(
     "   - Part B / Part C may use 'describe', 'explain', or 'give an example', but still about",
     "     ONE core point. Describing one mechanism in depth is fine; asking about two different",
     "     mechanisms in one part is not.",
-    "   Each part probes a different facet of the SAME core concept — do not pivot topics.",
+    "   Each part must target its assigned KC while staying coherent with the same shared item context.",
     "4. Each part question must match its task_type and target the KC assigned in the blueprint (kc_code).",
     `5. Write ONE holistic 0-3 rubric for the whole item. The 3-point level lists ${partCount} bullets`,
     `   (one per part) joined by AND; 2 = ${partCount === 2 ? "ONE bullet (partial)" : "two bullets"}; 1 = ${partCount === 2 ? "partially addresses one bullet" : "one bullet"}; 0 = insufficient.`,
