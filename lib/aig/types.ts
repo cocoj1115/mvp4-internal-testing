@@ -72,9 +72,13 @@ export interface BlueprintTaskPart {
 }
 
 export interface Blueprint {
+  anchor_kc: string;
   target_standard: string;
   core_kc: string;
+  selected_kcs?: string[];
   supporting_kcs?: string[];
+  stem_affordance?: string;
+  compatibility_rationale?: string;
   cognitive_demand: string;
   key_concepts: string[];
   task_sequence: {
@@ -127,9 +131,18 @@ export interface StimulusAsset {
 }
 
 export interface GeneratedItem {
+  anchor_kc?: string;
   target_standard?: string;
   core_kc?: string;
+  selected_kcs?: string[];
   supporting_kcs?: string[];
+  part_kcs?: {
+    "Part A": string;
+    "Part B": string;
+    "Part C"?: string;
+  };
+  stem_affordance?: string;
+  compatibility_rationale?: string;
   stem: string;
   stimulus_asset: StimulusAsset;
   parts: {

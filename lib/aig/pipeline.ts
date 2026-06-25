@@ -205,15 +205,25 @@ export async function assembleContextForCoreKC(
 
 const REQUIRED_BP_KEYS = [
   "target_standard",
+  "anchor_kc",
   "core_kc",
+  "selected_kcs",
   "cognitive_demand",
   "key_concepts",
   "task_sequence",
   "stimulus_type",
   "evidence_pattern",
+  "stem_affordance",
+  "compatibility_rationale",
   "expected_response_elements",
   "common_incomplete_responses",
 ];
+
+function normalizeKCCode(value: unknown, standardKCCodes: string[]): string | null {
+  if (typeof value !== "string") return null;
+  if (standardKCCodes.includes(value)) return value;
+  return standardKCCodes.find((code) => code.endsWith(value)) ?? null;
+}
 
 function validateBlueprint(
   parsed: unknown,
@@ -229,28 +239,44 @@ function validateBlueprint(
     if (!(key in bp)) return `Missing key: ${key}`;
   }
 
-  const coreKC = bp.core_kc;
-  if (typeof coreKC !== "string" || !standardKCCodes.includes(coreKC)) {
-    return `core_kc must be a valid KC code under this standard: "${coreKC}"`;
+  const anchorKC = normalizeKCCode(bp.anchor_kc, standardKCCodes);
+  if (!anchorKC) {
+    return `anchor_kc must be a valid KC code under this standard: "${String(bp.anchor_kc)}"`;
   }
-  if (fixedCoreKC && coreKC !== fixedCoreKC) {
-    return `core_kc must equal the preselected core KC: "${fixedCoreKC}"`;
+  if (fixedCoreKC && anchorKC !== fixedCoreKC) {
+    return `anchor_kc must equal the preselected anchor KC: "${fixedCoreKC}"`;
   }
+  bp.anchor_kc = anchorKC;
+
+  const coreKC = normalizeKCCode(bp.core_kc, standardKCCodes);
+  if (!coreKC) {
+    return `core_kc must be a valid KC code under this standard: "${String(bp.core_kc)}"`;
+  }
+  if (coreKC !== anchorKC) {
+    return `core_kc must equal anchor_kc for backward compatibility: "${anchorKC}"`;
+  }
+  bp.core_kc = coreKC;
 
   const supporting = bp.supporting_kcs;
+  let normalizedSupporting: string[] = [];
   if (supporting !== undefined) {
     if (!Array.isArray(supporting)) return "supporting_kcs must be an array";
     for (const code of supporting as string[]) {
-      if (!standardKCCodes.includes(code)) {
-        return `supporting_kcs contains unknown KC code: "${code}"`;
+      const normalized = normalizeKCCode(code, standardKCCodes);
+      if (!normalized) {
+        return `supporting_kcs contains unknown KC code: "${String(code)}"`;
       }
-      if (code === coreKC) {
-        return "supporting_kcs must not repeat core_kc";
+      if (normalized === anchorKC) {
+        return "supporting_kcs must not repeat anchor_kc";
       }
+      normalizedSupporting.push(normalized);
     }
+    normalizedSupporting = Array.from(new Set(normalizedSupporting));
+    if (normalizedSupporting.length > 2) {
+      return "supporting_kcs may contain at most two non-anchor KCs";
+    }
+    bp.supporting_kcs = normalizedSupporting;
   }
-
-  const validKCCodes = new Set<string>([coreKC, ...((supporting as string[] | undefined) ?? [])]);
 
   if (typeof bp.stimulus_type !== "string" || !VALID_STIMULUS_TYPES.has(bp.stimulus_type)) {
     return `stimulus_type must be one of: ${Array.from(VALID_STIMULUS_TYPES).join(", ")}`;
@@ -274,10 +300,46 @@ function validateBlueprint(
     if (!p.task_type || !taxonomyTypes.includes(p.task_type)) {
       return `Invalid or missing task_type for ${part}: "${p.task_type}"`;
     }
-    if (!p.kc_code || !validKCCodes.has(p.kc_code)) {
-      return `Invalid or missing kc_code for ${part}: "${p.kc_code}" (must be core_kc or one of supporting_kcs)`;
+    const normalizedPartKC = normalizeKCCode(p.kc_code, standardKCCodes);
+    if (!normalizedPartKC) {
+      return `Invalid or missing kc_code for ${part}: "${String(p.kc_code)}" (must be one of the standard KCs)`;
+    }
+    p.kc_code = normalizedPartKC;
+  }
+
+  const partKCs = presentParts.map((part) => seq[part]!.kc_code!);
+  if (!partKCs.includes(anchorKC)) {
+    return `anchor_kc must be assigned to at least one part: "${anchorKC}"`;
+  }
+  const uniquePartKCs = Array.from(new Set(partKCs));
+  if (uniquePartKCs.length > 3) {
+    return "Part KC assignments may use at most three unique KCs";
+  }
+
+  const selected = bp.selected_kcs;
+  if (!Array.isArray(selected)) return "selected_kcs must be an array";
+  const normalizedSelected = Array.from(
+    new Set(
+      (selected as unknown[])
+        .map((code) => normalizeKCCode(code, standardKCCodes))
+        .filter((code): code is string => Boolean(code))
+    )
+  );
+  if (normalizedSelected.length !== (selected as unknown[]).length) {
+    return "selected_kcs must contain only valid KC codes under this standard";
+  }
+  if (normalizedSelected.length > 3) {
+    return "selected_kcs may contain at most three unique KCs";
+  }
+  for (const code of uniquePartKCs) {
+    if (!normalizedSelected.includes(code)) {
+      return `selected_kcs must include every part kc_code: "${code}"`;
     }
   }
+  if (!normalizedSelected.includes(anchorKC)) {
+    return `selected_kcs must include anchor_kc: "${anchorKC}"`;
+  }
+  bp.selected_kcs = normalizedSelected;
 
   return null;
 }
@@ -382,43 +444,102 @@ function validateDirectItemKCSelection(
     return `stimulus_asset.type must equal the preselected stimulus type: "${fixedStimulusType}"`;
   }
 
-  const normalizedCode = (value: unknown): string | null => {
-    if (typeof value !== "string") return null;
-    if (standardKCCodes.includes(value)) return value;
-    return standardKCCodes.find((code) => code.endsWith(value)) ?? null;
-  };
-
   if (item.target_standard !== undefined) {
     if (typeof item.target_standard !== "string" || item.target_standard !== targetStandard) {
       return `target_standard must exactly match the requested standard: "${targetStandard}"`;
     }
   }
 
+  const rawAnchorKC = item.anchor_kc;
+  const anchorKC = normalizeKCCode(rawAnchorKC, standardKCCodes);
+  if (!anchorKC) {
+    return `anchor_kc must be a valid KC code under this standard: "${String(rawAnchorKC)}"`;
+  }
+  if (fixedCoreKC && anchorKC !== fixedCoreKC) {
+    return `anchor_kc must equal the preselected anchor KC: "${fixedCoreKC}"`;
+  }
+  item.anchor_kc = anchorKC;
+
   const rawCoreKC = item.core_kc;
-  const coreKC = normalizedCode(rawCoreKC);
+  const coreKC = normalizeKCCode(rawCoreKC, standardKCCodes);
   if (!coreKC) {
     return `core_kc must be a valid KC code under this standard: "${String(rawCoreKC)}"`;
   }
-  if (fixedCoreKC && coreKC !== fixedCoreKC) {
-    return `core_kc must equal the preselected core KC: "${fixedCoreKC}"`;
+  if (coreKC !== anchorKC) {
+    return `core_kc must equal anchor_kc for backward compatibility: "${anchorKC}"`;
   }
   item.core_kc = coreKC;
+
+  const partKCs = item.part_kcs as Record<string, unknown> | undefined;
+  if (!partKCs || typeof partKCs !== "object") {
+    return "part_kcs must be provided with one KC code for each generated part";
+  }
+  const parts = item.parts as Record<string, unknown>;
+  const presentParts = ["Part A", "Part B", "Part C"].filter((part) => parts[part]);
+  if (!partKCs["Part A"] || !partKCs["Part B"]) {
+    return "part_kcs must include Part A and Part B";
+  }
+  const normalizedPartKCs: Record<string, string> = {};
+  for (const part of presentParts) {
+    const normalized = normalizeKCCode(partKCs[part], standardKCCodes);
+    if (!normalized) {
+      return `part_kcs.${part} must be a valid KC code under this standard: "${String(partKCs[part])}"`;
+    }
+    normalizedPartKCs[part] = normalized;
+  }
+  if (!Object.values(normalizedPartKCs).includes(anchorKC)) {
+    return `anchor_kc must be assigned to at least one part: "${anchorKC}"`;
+  }
+  const uniquePartKCs = Array.from(new Set(Object.values(normalizedPartKCs)));
+  if (uniquePartKCs.length > 3) {
+    return "part_kcs may use at most three unique KCs";
+  }
+  item.part_kcs = normalizedPartKCs;
+
+  const selected = item.selected_kcs;
+  if (!Array.isArray(selected)) return "selected_kcs must be an array";
+  const normalizedSelected = Array.from(
+    new Set(
+      (selected as unknown[])
+        .map((code) => normalizeKCCode(code, standardKCCodes))
+        .filter((code): code is string => Boolean(code))
+    )
+  );
+  if (normalizedSelected.length !== (selected as unknown[]).length) {
+    return "selected_kcs must contain only valid KC codes under this standard";
+  }
+  if (normalizedSelected.length > 3) {
+    return "selected_kcs may contain at most three unique KCs";
+  }
+  for (const code of uniquePartKCs) {
+    if (!normalizedSelected.includes(code)) {
+      return `selected_kcs must include every part_kcs value: "${code}"`;
+    }
+  }
+  if (!normalizedSelected.includes(anchorKC)) {
+    return `selected_kcs must include anchor_kc: "${anchorKC}"`;
+  }
+  item.selected_kcs = normalizedSelected;
 
   const supporting = item.supporting_kcs;
   if (supporting !== undefined) {
     if (!Array.isArray(supporting)) return "supporting_kcs must be an array";
     const normalizedSupporting: string[] = [];
     for (const code of supporting as unknown[]) {
-      const normalized = normalizedCode(code);
+      const normalized = normalizeKCCode(code, standardKCCodes);
       if (!normalized) {
         return `supporting_kcs contains unknown KC code: "${String(code)}"`;
       }
-      if (normalized === coreKC) {
-        return "supporting_kcs must not repeat core_kc";
+      if (normalized === anchorKC) {
+        return "supporting_kcs must not repeat anchor_kc";
       }
       normalizedSupporting.push(normalized);
     }
-    item.supporting_kcs = normalizedSupporting;
+    const uniqueSupporting = Array.from(new Set(normalizedSupporting));
+    if (uniqueSupporting.length > 2) {
+      return "supporting_kcs may contain at most two non-anchor KCs";
+    }
+    item.supporting_kcs = uniqueSupporting;
   }
 
   return null;
@@ -605,7 +726,8 @@ function styleCheckPrompt(item: GeneratedItem, standard: string): string {
     "FAIL: item drifts to unrelated concepts or a different standard.",
     "",
     "7. KC_ALIGNMENT",
-    "No target KC is provided in this app version. Mark this criterion pass with flag null unless the item clearly avoids all KCs from the standard.",
+    "PASS: each part is assessable against its assigned KC, and the assigned KCs cohere around one shared stem/stimulus.",
+    "FAIL: a part does not assess its assigned KC, or the assigned KCs feel disconnected from the shared item context.",
     "",
     "Set top-level passes=true ONLY if every criterion pass value is true.",
     "If any criterion pass value is false, top-level passes MUST be false.",
