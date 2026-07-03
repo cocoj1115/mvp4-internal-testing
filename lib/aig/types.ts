@@ -105,6 +105,17 @@ export interface ScoringRubric {
   "0": string;
 }
 
+export interface PartScoringRubric {
+  points_possible: 1 | 2 | 3;
+  criteria: Record<string, string>;
+}
+
+export interface AnnotatedResponse {
+  score: 0 | 1 | 2 | 3;
+  response: string;
+  annotation: string;
+}
+
 export type StimulusAssetType =
   | "table"
   | "line_graph"
@@ -151,6 +162,12 @@ export interface GeneratedItem {
     "Part C"?: ItemPart;
   };
   scoring_rubric: ScoringRubric;
+  part_rubrics?: {
+    "Part A": PartScoringRubric;
+    "Part B": PartScoringRubric;
+    "Part C"?: PartScoringRubric;
+  };
+  annotated_responses?: AnnotatedResponse[];
 }
 
 export type AIGStimulusType =
@@ -167,6 +184,8 @@ export interface AIGRunOptions {
   stimulusType: AIGStimulusType;
   revisionInstructions?: string;
   fixedCoreKC?: string;
+  useStudyGuideRag?: boolean;
+  telerLevel?: 2 | 3 | 4;
 }
 
 export interface StyleCheckCriterionResult {

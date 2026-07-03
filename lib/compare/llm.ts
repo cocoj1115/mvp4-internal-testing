@@ -12,6 +12,7 @@ export interface CompareLlmRequest {
   temperature: number;
   messages: CompareChatMessage[];
   jsonMode?: boolean;
+  maxTokens?: number;
 }
 
 export interface CompareLlmResponse {
@@ -85,7 +86,7 @@ async function callAnthropic(request: CompareLlmRequest): Promise<CompareLlmResp
   const model = envModelOverride("anthropic", request.modelId);
   const body: Record<string, unknown> = {
     model,
-    max_tokens: 1200,
+    max_tokens: request.maxTokens ?? 1200,
     system: systemMessage(request.messages),
     messages: nonSystemMessages(request.messages),
   };
@@ -189,6 +190,7 @@ async function callGoogle(request: CompareLlmRequest): Promise<CompareLlmRespons
       generationConfig: {
         temperature: request.temperature,
         responseMimeType: request.jsonMode ? "application/json" : "text/plain",
+        ...(request.maxTokens ? { maxOutputTokens: request.maxTokens } : {}),
       },
     }),
   });
