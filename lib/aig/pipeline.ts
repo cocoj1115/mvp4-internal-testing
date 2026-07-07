@@ -7,6 +7,7 @@ import {
   retrieveStudyGuide,
 } from "./data";
 import { buildBlueprintPrompt, buildItemPrompt, buildKeystoneDirectPrompt } from "./prompts";
+import { buildContextDirectItemPrompt } from "./methods/method2-blueprint-rag";
 import { generateIllustrationB64 } from "./illustration";
 import type {
   AIGRunOptions,
@@ -135,7 +136,8 @@ export async function assembleContext(standard: string): Promise<ContextPack> {
 
 export async function assembleContextForCoreKC(
   standard: string,
-  coreKCCode: string
+  coreKCCode: string,
+  options?: { useStudyGuideRag?: boolean }
 ): Promise<ContextPack> {
   const taxonomy = getTaxonomy();
   const allCards = getCards();
@@ -149,9 +151,14 @@ export async function assembleContextForCoreKC(
 
   const coreVocab = Array.from(new Set(selectedCoreKC.vocab));
   const queryParts = [selectedCoreKC.statement, ...coreVocab].filter(Boolean);
+  const useStudyGuideRag = options?.useStudyGuideRag ?? true;
   const studyGuideQuery = queryParts.join(". ");
-  const candidateChunks = await retrieveStudyGuide(studyGuideQuery, 8, 0.25);
-  const studyGuideChunks = selectStudyGuideChunksForCoreKC(candidateChunks);
+  const candidateChunks = useStudyGuideRag
+    ? await retrieveStudyGuide(studyGuideQuery, 8, 0.25)
+    : [];
+  const studyGuideChunks = useStudyGuideRag
+    ? selectStudyGuideChunksForCoreKC(candidateChunks)
+    : [];
 
   const { getABCPriors } = await import("./data");
   const priors = getABCPriors();
@@ -359,10 +366,90 @@ function containsRubricPlaceholder(text: unknown): boolean {
   return /\[[^\]]+\]/.test(text) || /<[^>]+>/.test(text);
 }
 
+function validatePartRubrics(item: Record<string, unknown>, parts: Record<string, unknown>): string | null {
+  const partRubrics = item.part_rubrics as Record<string, unknown> | undefined;
+  if (!partRubrics || typeof partRubrics !== "object") {
+    return "part_rubrics must be an object";
+  }
+
+  const generatedParts = (["Part A", "Part B", "Part C"] as const).filter((part) => Boolean(parts[part]));
+  let totalPoints = 0;
+  for (const part of generatedParts) {
+    const rubric = partRubrics[part] as Record<string, unknown> | undefined;
+    if (!rubric || typeof rubric !== "object") {
+      return `part_rubrics.${part} must be an object`;
+    }
+    const points = rubric.points_possible;
+    if (typeof points !== "number" || !Number.isFinite(points) || points < 1 || points > 3 || !Number.isInteger(points)) {
+      return `part_rubrics.${part}.points_possible must be 1, 2, or 3`;
+    }
+    totalPoints += points;
+
+    const criteria = rubric.criteria as Record<string, unknown> | undefined;
+    if (!criteria || typeof criteria !== "object") {
+      return `part_rubrics.${part}.criteria must be an object`;
+    }
+    if (typeof criteria["0"] !== "string" || !criteria["0"].trim()) {
+      return `part_rubrics.${part}.criteria must include a non-empty "0" criterion`;
+    }
+    const fullCreditCriterion = criteria[String(points)];
+    if (typeof fullCreditCriterion !== "string" || !fullCreditCriterion.trim()) {
+      return `part_rubrics.${part}.criteria must include a non-empty "${points}" criterion`;
+    }
+    for (const value of Object.values(criteria)) {
+      if (typeof value !== "string" || !value.trim()) {
+        return `part_rubrics.${part}.criteria values must be non-empty strings`;
+      }
+      if (containsRubricPlaceholder(value)) {
+        return "part_rubrics contains unresolved placeholder text";
+      }
+    }
+  }
+
+  if (totalPoints !== 3) {
+    return "part_rubrics points_possible values must sum to 3";
+  }
+
+  return null;
+}
+
+function validateAnnotatedResponses(item: Record<string, unknown>): string | null {
+  const responses = item.annotated_responses;
+  if (!Array.isArray(responses)) {
+    return "annotated_responses must be an array";
+  }
+  const requiredScores = new Set([0, 1, 2, 3]);
+  for (const response of responses) {
+    if (!response || typeof response !== "object") {
+      return "annotated_responses entries must be objects";
+    }
+    const record = response as Record<string, unknown>;
+    if (typeof record.score !== "number" || ![0, 1, 2, 3].includes(record.score)) {
+      return "annotated_responses.score must be 0, 1, 2, or 3";
+    }
+    requiredScores.delete(record.score);
+    if (typeof record.response !== "string" || !record.response.trim()) {
+      return "annotated_responses.response must be a non-empty string";
+    }
+    if (typeof record.annotation !== "string" || !record.annotation.trim()) {
+      return "annotated_responses.annotation must be a non-empty string";
+    }
+    if (containsRubricPlaceholder(record.response) || containsRubricPlaceholder(record.annotation)) {
+      return "annotated_responses contains unresolved placeholder text";
+    }
+  }
+
+  if (requiredScores.size > 0) {
+    return `annotated_responses must include score points: ${Array.from(requiredScores).join(", ")}`;
+  }
+
+  return null;
+}
+
 function validateItem(parsed: unknown): string | null {
   if (!parsed || typeof parsed !== "object") return "Response is not an object";
   const item = parsed as Record<string, unknown>;
-  for (const key of ["stem", "stimulus_asset", "parts", "scoring_rubric"]) {
+  for (const key of ["stem", "stimulus_asset", "parts", "scoring_rubric", "part_rubrics", "annotated_responses"]) {
     if (!(key in item)) return `Missing key: ${key}`;
   }
 
@@ -412,6 +499,13 @@ function validateItem(parsed: unknown): string | null {
   ) {
     return "scoring_rubric contains unresolved placeholder text";
   }
+
+  const partRubricError = validatePartRubrics(item, parts);
+  if (partRubricError) return partRubricError;
+
+  const annotatedResponseError = validateAnnotatedResponses(item);
+  if (annotatedResponseError) return annotatedResponseError;
+
   return null;
 }
 
@@ -638,6 +732,28 @@ export async function generateItem(
     system,
     user,
     (parsed) => validateItemForBlueprint(parsed, bp),
+    model,
+    temperature
+  );
+}
+
+export async function generateContextDirectItem(
+  ctx: ContextPack,
+  model: string,
+  temperature: number,
+  options: AIGRunOptions
+): Promise<GeneratedItem> {
+  const { system, user } = buildContextDirectItemPrompt(ctx, options);
+  return callWithRetry<GeneratedItem>(
+    system,
+    user,
+    (parsed) => validateDirectItemKCSelection(
+      parsed,
+      ctx.standard,
+      ctx.standardKCs.map((kc) => kc.code),
+      ctx.selectedCoreKC?.code,
+      options.stimulusType === "auto" ? undefined : options.stimulusType
+    ),
     model,
     temperature
   );
@@ -870,7 +986,7 @@ export interface AIGReviewOptions {
   maxAttempts: number;
 }
 
-async function attachGeneratedIllustration(result: MethodRunResult): Promise<MethodRunResult> {
+export async function attachGeneratedIllustration(result: MethodRunResult): Promise<MethodRunResult> {
   const asset = result.item.stimulus_asset;
   if (asset.type !== "illustration" || !asset.illustration_prompt || asset.image_b64) {
     return result;
@@ -1010,10 +1126,31 @@ export const AIG_METHODS: Record<string, AIGMethod> = {
     selectCoreKCBeforeRun: true,
     async run(standard, model, temperature, options) {
       const coreKC = options.fixedCoreKC ?? selectRandomKC(getKCsByStandard(standard)).code;
-      const ctx = await assembleContextForCoreKC(standard, coreKC);
+      const ctx = await assembleContextForCoreKC(standard, coreKC, {
+        useStudyGuideRag: options.useStudyGuideRag,
+      });
       const blueprint = await generateBlueprint(ctx, model, temperature, options);
-      const item = await generateItem(blueprint, ctx, model, temperature, 3, options);
+      const item = await generateItem(
+        blueprint,
+        ctx,
+        model,
+        temperature,
+        options.telerLevel ?? 3,
+        options
+      );
       return { blueprint, item, grounding: ctx.grounding };
+    },
+  },
+  method_blueprint_direct_l3: {
+    label: "Context Direct + TELeR L3",
+    selectCoreKCBeforeRun: true,
+    async run(standard, model, temperature, options) {
+      const coreKC = options.fixedCoreKC ?? selectRandomKC(getKCsByStandard(standard)).code;
+      const ctx = await assembleContextForCoreKC(standard, coreKC, {
+        useStudyGuideRag: options.useStudyGuideRag,
+      });
+      const item = await generateContextDirectItem(ctx, model, temperature, options);
+      return { item, grounding: ctx.grounding };
     },
   },
   method_simple_direct: {

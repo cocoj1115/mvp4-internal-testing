@@ -1,4 +1,4 @@
-import type { AIGRunOptions, ContextPack, Blueprint } from "../types";
+import type { AIGRunOptions, ContextPack, Blueprint, AIGStimulusType } from "../types";
 import { getABCPriors, getRubrics, getWholeItems } from "../data";
 import { forcedStimulusInstruction } from "./common";
 
@@ -298,6 +298,66 @@ export function buildItemPrompt(
           "1": "Minimal — fulfilling ONE of the bullets",
           "0": "Insufficient evidence",
         };
+  const partRubricTemplate =
+    partCount === 2
+      ? {
+          "Part A": {
+            points_possible: 1,
+            criteria: {
+              "1": "Concrete Part A credit criterion",
+              "0": "No credit criterion",
+            },
+          },
+          "Part B": {
+            points_possible: 2,
+            criteria: {
+              "2": "Complete Part B credit criterion",
+              "1": "Partial Part B credit criterion",
+              "0": "No credit criterion",
+            },
+          },
+        }
+      : {
+          "Part A": {
+            points_possible: 1,
+            criteria: {
+              "1": "Concrete Part A credit criterion",
+              "0": "No credit criterion",
+            },
+          },
+          "Part B": {
+            points_possible: 1,
+            criteria: {
+              "1": "Concrete Part B credit criterion",
+              "0": "No credit criterion",
+            },
+          },
+          "Part C": {
+            points_possible: 1,
+            criteria: {
+              "1": "Concrete Part C credit criterion",
+              "0": "No credit criterion",
+            },
+          },
+        };
+
+  const telerSystemInstruction =
+    telerLevel <= 2
+      ? "Use the KC statements, key concepts, and rubric anchors as the primary content constraints. Keep the prompt-level guidance intentionally light."
+      : "Ground all scientific content in the study-guide chunks and key concepts provided. Do NOT invent biology outside those sources.";
+
+  const telerUserSection =
+    telerLevel <= 2
+      ? `(TELeR L${telerLevel}: study-guide details and expected response elements are intentionally withheld.)`
+      : telerLevel >= 4
+        ? [
+            `=== EXPECTED RESPONSE ELEMENTS (TELeR L${telerLevel}) ===`,
+            bp.expected_response_elements.join("\n"),
+            "",
+            `=== COMMON INCOMPLETE RESPONSES (TELeR L${telerLevel}) ===`,
+            bp.common_incomplete_responses.join("\n"),
+          ].join("\n")
+        : `(TELeR L${telerLevel}: expected_response_elements NOT provided — derive scoring criteria from KC and blueprint only.)`;
 
   const system = [
     "You are an expert item writer for Pennsylvania Keystone Biology Keystone exams.",
@@ -317,15 +377,17 @@ export function buildItemPrompt(
     "     mechanisms in one part is not.",
     "   Each part must target its assigned KC while staying coherent with the same shared item context.",
     "4. Each part question must match its task_type and target the KC assigned in the blueprint (kc_code).",
-    `5. Write ONE holistic 0-3 rubric for the whole item. The 3-point level lists ${partCount} bullets`,
+    `5. Write one holistic 0-3 rubric AND per-part analytic rubrics. The holistic 3-point level lists ${partCount} bullets`,
     `   (one per part) joined by AND; 2 = ${partCount === 2 ? "ONE bullet (partial)" : "two bullets"}; 1 = ${partCount === 2 ? "partially addresses one bullet" : "one bullet"}; 0 = insufficient.`,
     "   Match the exact style of the anchors.",
+    "   The part_rubrics points_possible values must sum to 3. For 3-part items use 1 point per part; for 2-part items assign 1 point to Part A and 2 points to Part B.",
+    "   Also provide annotated_responses for total scores 0, 1, 2, and 3. Each annotation must explain why that sample earns that score.",
     "   IMPORTANT: the rubricTemplate shown in the schema is only a shape guide.",
     "   You must replace every placeholder with concrete biology-specific credit criteria for THIS item.",
     "   Do NOT output [bullet A], [bullet B], [bullet C], [Part A concept], or any other unresolved template text.",
-    "6. Do NOT reveal expected answers in the stem, stimulus asset, or part questions.",
-    "7. Ground all scientific content in the study-guide chunks and key concepts provided.",
-    "   Do NOT invent biology outside those sources.",
+    "6. Use a specific, plausible biology context when possible; avoid generic textbook-only scenarios if a concrete investigation or organism/system context preserves alignment.",
+    "7. Do NOT reveal expected answers in the stem, stimulus asset, or part questions.",
+    telerSystemInstruction,
     `8. Stimulus type is fixed by the blueprint: ${bp.stimulus_type}.`,
     options?.revisionInstructions
       ? `9. Revision instructions from style check: ${options.revisionInstructions}`
@@ -349,6 +411,13 @@ export function buildItemPrompt(
       },
       parts: partSchema,
       scoring_rubric: rubricTemplate,
+      part_rubrics: partRubricTemplate,
+      annotated_responses: [
+        { score: 3, response: "Full-credit sample student response", annotation: "Why it earns 3 points" },
+        { score: 2, response: "Two-point sample student response", annotation: "Why it earns 2 points" },
+        { score: 1, response: "One-point sample student response", annotation: "Why it earns 1 point" },
+        { score: 0, response: "Zero-point sample student response", annotation: "Why it earns 0 points" },
+      ],
     }),
   ].join("\n");
 
@@ -390,15 +459,13 @@ export function buildItemPrompt(
     "=== FIXED STIMULUS TYPE ===",
     bp.stimulus_type,
     "",
-    telerLevel >= 4
-      ? `=== EXPECTED RESPONSE ELEMENTS (TELeR L${telerLevel}) ===\n${bp.expected_response_elements.join("\n")}`
-      : `(TELeR L${telerLevel}: expected_response_elements NOT provided — derive scoring criteria from KC and blueprint only.)`,
+    telerUserSection,
     "",
     "=== RUBRIC ANCHORS (align format and bullet style) ===",
     rubricAnchors,
     "",
-    "=== STUDY-GUIDE GROUNDING ===",
-    studyGuideSection,
+    telerLevel <= 2 ? "" : "=== STUDY-GUIDE GROUNDING ===",
+    telerLevel <= 2 ? "" : studyGuideSection,
     "",
     options?.revisionInstructions
       ? `=== REVISION INSTRUCTIONS ===\n${options.revisionInstructions}\n`
@@ -408,6 +475,166 @@ export function buildItemPrompt(
     .filter((line) => line !== undefined)
     .filter((line) => line !== "")
     .join("\n");
+
+  return { system, user };
+}
+
+export function buildContextDirectItemPrompt(
+  ctx: ContextPack,
+  options: AIGRunOptions
+): { system: string; user: string } {
+  const fixedStimulusType: Exclude<AIGStimulusType, "auto"> =
+    options.stimulusType === "auto" ? "scenario" : options.stimulusType;
+  const selectedCoreKC = ctx.selectedCoreKC;
+  const partSchema = {
+    "Part A": { task_type: "DOK 1-2 identify/describe", question: "<Part A question>" },
+    "Part B": { task_type: "DOK 2 mechanism/evidence", question: "<Part B question>" },
+    "Part C": { task_type: "DOK 3 prediction/justification", question: "<Part C question>" },
+  };
+  const partRubricTemplate = {
+    "Part A": {
+      points_possible: 1,
+      criteria: {
+        "1": "Concrete Part A credit criterion",
+        "0": "No credit criterion",
+      },
+    },
+    "Part B": {
+      points_possible: 1,
+      criteria: {
+        "1": "Concrete Part B credit criterion",
+        "0": "No credit criterion",
+      },
+    },
+    "Part C": {
+      points_possible: 1,
+      criteria: {
+        "1": "Concrete Part C credit criterion",
+        "0": "No credit criterion",
+      },
+    },
+  };
+
+  const studyGuideSection =
+    ctx.studyGuideChunks.length > 0
+      ? ctx.studyGuideChunks.map((c) => `[${c.chunk_id}]\n${c.text}`).join("\n---\n")
+      : "(No study-guide chunks above threshold — use KC statements and vocabulary only.)";
+
+  const rubricAnchors = [
+    `GENERAL RUBRIC FRAMEWORK:\n${getRubrics().general}`,
+    ...ctx.relevantRubrics.map(
+      (r) => `STYLE ANCHOR — ${r.item} (${r.alignment}, DOK ${r.dok}):\n${r.scoring_guideline}`
+    ),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  const kcListSection = ctx.standardKCs
+    .map((kc) => `  ${kc.code}: ${kc.statement}\n    Vocab: ${kc.vocab.join(", ")}`)
+    .join("\n");
+
+  const selectedCoreSection = selectedCoreKC
+    ? [
+        `Selected anchor KC: ${selectedCoreKC.code}`,
+        `Statement: ${selectedCoreKC.statement}`,
+        `Vocab: ${selectedCoreKC.vocab.join(", ") || "(none)"}`,
+        "The item JSON anchor_kc value must exactly match this selected anchor KC.",
+        "The item JSON core_kc value must match anchor_kc for backward compatibility.",
+        "The item JSON selected_kcs array must include anchor_kc and every part_kcs value.",
+        "The item JSON part_kcs object must assign one valid KC code to each generated part.",
+      ].join("\n")
+    : "(No preselected anchor KC; choose one from the KC list.)";
+
+  const system = [
+    "You are an expert item writer for Pennsylvania Keystone Biology Keystone exams.",
+    "Generate one constructed-response item directly from the target KC context.",
+    "There is no separate blueprint step in this condition, but the item must still be structured and Keystone-like.",
+    "",
+    "ITEM WRITING RULES:",
+    "1. Keep the item mainly focused on one anchor KC. Use supporting KCs only as background.",
+    `2. Use exactly stimulus_asset.type="${fixedStimulusType}".`,
+    ...stimulusGenerationRules(fixedStimulusType).map((line) => `   ${line}`),
+    "3. Write Part A as a low-entry convergent task, Part B as mechanism/evidence reasoning, and Part C as prediction, application, or justification.",
+    "4. Each part asks for exactly one thing. Do not chain sub-questions inside one part.",
+    "5. Ground all scientific content in the study-guide chunks, KC statements, and vocabulary provided.",
+    "6. Write one holistic 0-3 rubric plus per-part analytic rubrics. Replace every placeholder with concrete biology-specific credit criteria.",
+    "   - part_rubrics must include every generated part and points_possible values must sum to 3.",
+    "   - Also provide annotated_responses for total scores 0, 1, 2, and 3.",
+    "7. Use a specific, plausible biology context when possible; avoid generic textbook-only scenarios if a concrete investigation or organism/system context preserves alignment.",
+    "8. Do not reveal expected answers in the stem, stimulus asset, or part questions.",
+    "9. Return anchor_kc, core_kc, selected_kcs, and part_kcs exactly as requested in the schema.",
+    "   - anchor_kc must be the preselected anchor KC.",
+    "   - core_kc must equal anchor_kc.",
+    "   - selected_kcs must include anchor_kc and every KC used in part_kcs.",
+    "   - part_kcs must include Part A and Part B, and Part C when Part C is generated.",
+    options.revisionInstructions
+      ? `9. Revision instructions from style check: ${options.revisionInstructions}`
+      : "",
+    "",
+    "OUTPUT: strict JSON only, no markdown wrapper, matching exactly:",
+    JSON.stringify({
+      target_standard: ctx.standard,
+      anchor_kc: selectedCoreKC?.code ?? "<one KC code>",
+      core_kc: selectedCoreKC?.code ?? "<one KC code>",
+      selected_kcs: [selectedCoreKC?.code ?? "<anchor KC code>"],
+      supporting_kcs: ["<optional supporting KC codes>"],
+      part_kcs: {
+        "Part A": selectedCoreKC?.code ?? "<KC code>",
+        "Part B": selectedCoreKC?.code ?? "<KC code>",
+        "Part C": selectedCoreKC?.code ?? "<KC code>",
+      },
+      stem: "<biological context sentence(s)>",
+      stimulus_asset: {
+        type: fixedStimulusType,
+        title: "<short Keystone-style figure title, 2-8 words>",
+        table_markdown: "<GFM table string — only when type=table, else omit>",
+        chart_data: {
+          x_label: "<axis label>",
+          y_label: "<axis label>",
+          series: [{ name: "<series name>", points: [["<x>", 0]] }],
+        },
+        diagram_spec: "<complete SVG string — only when type=diagram, else omit>",
+        scenario_text: "<scenario stimulus text — only when type=scenario, else omit>",
+        illustration_prompt: "<image-generation prompt string — only when type=illustration, else omit>",
+      },
+      parts: partSchema,
+      scoring_rubric: {
+        points_possible: 3,
+        "3": "Thorough — by ALL of: actual Part A biology criterion AND actual Part B biology criterion AND actual Part C biology criterion",
+        "2": "Partial — fulfilling any two of those actual biology criteria",
+        "1": "Minimal — fulfilling one actual biology criterion",
+        "0": "Insufficient evidence",
+      },
+      part_rubrics: partRubricTemplate,
+      annotated_responses: [
+        { score: 3, response: "Full-credit sample student response", annotation: "Why it earns 3 points" },
+        { score: 2, response: "Two-point sample student response", annotation: "Why it earns 2 points" },
+        { score: 1, response: "One-point sample student response", annotation: "Why it earns 1 point" },
+        { score: 0, response: "Zero-point sample student response", annotation: "Why it earns 0 points" },
+      ],
+    }),
+  ].join("\n");
+
+  const user = [
+    "=== TARGET STANDARD ===",
+    `Standard: ${ctx.standard}`,
+    `KCs under this standard (${ctx.standardKCs.length} total):`,
+    kcListSection,
+    "",
+    "=== PRESELECTED CORE KC ===",
+    selectedCoreSection,
+    "",
+    "=== RUBRIC ANCHORS ===",
+    rubricAnchors,
+    "",
+    "=== STUDY-GUIDE GROUNDING ===",
+    studyGuideSection,
+    "",
+    "=== STIMULUS CONSTRAINT ===",
+    forcedStimulusInstruction({ ...options, stimulusType: fixedStimulusType }),
+    "",
+    "Generate the item JSON now.",
+  ].join("\n");
 
   return { system, user };
 }

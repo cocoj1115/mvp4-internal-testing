@@ -156,6 +156,35 @@ export function buildKeystoneDirectPrompt(
       "1": "Minimal — fulfilling one actual biology criterion",
       "0": "Insufficient evidence",
     },
+    part_rubrics: {
+      "Part A": {
+        points_possible: 1,
+        criteria: {
+          "1": "Concrete Part A credit criterion",
+          "0": "No credit criterion",
+        },
+      },
+      "Part B": {
+        points_possible: 1,
+        criteria: {
+          "1": "Concrete Part B credit criterion",
+          "0": "No credit criterion",
+        },
+      },
+      "Part C": {
+        points_possible: 1,
+        criteria: {
+          "1": "Concrete Part C credit criterion",
+          "0": "No credit criterion",
+        },
+      },
+    },
+    annotated_responses: [
+      { score: 3, response: "Full-credit sample student response", annotation: "Why it earns 3 points" },
+      { score: 2, response: "Two-point sample student response", annotation: "Why it earns 2 points" },
+      { score: 1, response: "One-point sample student response", annotation: "Why it earns 1 point" },
+      { score: 0, response: "Zero-point sample student response", annotation: "Why it earns 0 points" },
+    ],
   };
 
   const user = [
@@ -205,7 +234,10 @@ export function buildKeystoneDirectPrompt(
     "  - Do NOT leave placeholders such as [Part A concept], [Part B concept], [Part C concept], [bullet A], or angle-bracket template text.",
     "  - The rubric must describe the actual biology ideas required for credit.",
     "  - The 3-point rubric must explicitly name the actual Part A, Part B, and Part C credit criteria.",
+    "  - Also write part_rubrics for each generated part. The points_possible values must sum to 3.",
+    "  - Provide annotated_responses for total scores 0, 1, 2, and 3. Each annotation must explain why the sample earns that score.",
     "  - The scoring_rubric strings in the schema below are format examples only; do not copy them verbatim.",
+    "Use a specific, plausible biology context when possible; avoid generic textbook-only scenarios if a concrete investigation or organism/system context preserves alignment.",
     "If type='diagram', diagram_spec MUST be a complete inline SVG string, not prose.",
     "For diagram SVG output:",
     "  - Start with <svg width='540' height='320' xmlns='http://www.w3.org/2000/svg'>.",
